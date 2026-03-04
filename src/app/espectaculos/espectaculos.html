@@ -1,0 +1,13 @@
+<h1>Espectáculos</h1>
+<button (click)="getEscenarios()">Ver espectáculos</button>
+
+<ol>
+    <li *ngFor="let escenario of escenarios">
+        <span> (click)="getEspectaculos(escenario)">{{ escenario.nombre }} - {{ escenario.descripcion }}</span>
+        <ul>
+            <li *ngFor="let espectaculo of espectaculos">
+                {{ espectaculo.artista }} - {{ espectaculo.fecha }}
+            </li>
+        </ul>
+    </li>
+<ol>
