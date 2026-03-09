@@ -1,13 +1,43 @@
 <h1>Espectáculos</h1>
-<button (click)="getEscenarios()">Ver espectáculos</button>
+<button (click)="getEscenarios()" [disabled]="cargandoEscenarios()">
+	{{ cargandoEscenarios() ? 'Cargando...' : 'Ver escenarios' }}
+</button>
 
-<ol>
-    <li *ngFor="let escenario of escenarios">
-        <span> (click)="getEspectaculos(escenario)">{{ escenario.nombre }} - {{ escenario.descripcion }}</span>
-        <ul>
-            <li *ngFor="let espectaculo of espectaculos">
-                {{ espectaculo.artista }} - {{ espectaculo.fecha }}
-            </li>
-        </ul>
-    </li>
-<ol>
+<!-- Lista de Escenarios -->
+<ol *ngIf="escenarios().length > 0"> 
+	<li *ngFor="let escenario of escenarios()">
+		<span 
+			(click)="getEspectaculos(escenario)" 
+			[style.cursor]="cargandoEspectaculos() ? 'wait' : 'pointer'"
+			[style.opacity]="cargandoEspectaculos() && escenarioSeleccionado() === escenario ? '0.6' : '1'">
+			{{escenario.nombre}} - {{escenario.descripcion}}
+		</span>
+		
+		<!-- Indicador de carga -->
+		<span *ngIf="cargandoEspectaculos() && escenarioSeleccionado() === escenario">
+			Cargando espectáculos...
+		</span>
+		
+		<!-- Lista de Espectáculos del escenario seleccionado -->
+		<ul *ngIf="escenarioSeleccionado() === escenario && escenario.espectaculos && escenario.espectaculos.length > 0">
+			<li *ngFor="let espectaculo of escenario.espectaculos">
+				<span 
+					(click)="getNumeroDeEntradas(espectaculo)" 
+					[style.cursor]="cargandoEntradas() ? 'wait' : 'pointer'"
+					[style.opacity]="cargandoEntradas() && espectaculoSeleccionado() === espectaculo ? '0.6' : '1'">
+					{{espectaculo.artista}} - {{espectaculo.fecha}}
+				</span>
+				
+				<!-- Indicador de carga de entradas -->
+				<span *ngIf="cargandoEntradas() && espectaculoSeleccionado() === espectaculo">
+					Cargando entradas...
+				</span>
+				
+				<!-- Número de entradas disponibles -->
+				<span *ngIf="espectaculoSeleccionado() === espectaculo && espectaculo.entradas && !cargandoEntradas()">
+					Hay {{espectaculo.entradas.total}} entradas, de las cuales <a (click)="irAComprarEntradas()"> {{espectaculo.entradas.libres}} </a> están libres.
+				</span>
+			</li>
+		</ul>
+	</li>
+</ol>
