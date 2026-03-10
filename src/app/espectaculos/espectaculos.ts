@@ -1,4 +1,4 @@
-import { Component, signal, Signal } from '@angular/core';
+import { Component, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
 import { Espectaculos as EspectaculosService } from '../espectaculos';
@@ -99,8 +99,8 @@ getNumeroDeEntradas(espectaculo: any){
         );
 	}
     
-    irAComprarEntradas(){
-        this.router.navigate(['/comprar']);
+    irAComprarEntradas(espectaculo: any){
+        this.router.navigate(['/comprar', espectaculo.id]);
     }
 /*
     getEntradasLibres(espectaculo: any){

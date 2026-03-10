@@ -1,0 +1,9 @@
+.link-button {
+  border: none;
+  background: transparent;
+  color: #9a3412;
+  cursor: pointer;
+  font: inherit;
+  padding: 0 0.15rem;
+  text-decoration: underline;
+}

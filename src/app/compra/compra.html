@@ -1,1 +1,78 @@
-<p>compra works!</p>
+<section class="purchase-shell">
+  <article class="purchase-card">
+    <p class="eyebrow">Compra</p>
+    <h1>Seleccion de entradas</h1>
+    <p class="lede">
+      Elige las entradas disponibles, reserva tu seleccion y completa el pago con Stripe.
+    </p>
+
+    <p *ngIf="cargando()">Cargando entradas disponibles...</p>
+
+    <div *ngIf="!cargando() && entradas().length === 0" class="empty-state">
+      No quedan entradas libres para este espectaculo.
+    </div>
+
+    <div *ngIf="error()" class="error-box">{{ error() }}</div>
+
+    <ul *ngIf="!cargando() && entradas().length > 0" class="ticket-list">
+      <li *ngFor="let entrada of entradas()" class="ticket-item">
+        <label>
+          <input
+            type="checkbox"
+            [checked]="isSelected(entrada.id)"
+            [disabled]="!!paymentIntent()"
+            (change)="toggleEntrada(entrada.id, $any($event.target).checked)"
+          />
+          <span class="ticket-copy">
+            <strong>{{ entrada.descripcion }}</strong>
+            <small>{{ formatEuros(entrada.precio) }} EUR</small>
+          </span>
+        </label>
+      </li>
+    </ul>
+
+    <div *ngIf="entradas().length > 0" class="summary-box">
+      <p>Entradas seleccionadas: {{ seleccionadas().length }}</p>
+      <p>Total seleccionado: {{ formatEuros(totalSeleccionado()) }} EUR</p>
+      <button
+        *ngIf="!paymentIntent()"
+        type="button"
+        class="primary"
+        [disabled]="seleccionadas().length === 0 || reservando()"
+        (click)="prepararPago()"
+      >
+        {{ reservando() ? 'Preparando...' : 'Reservar y pagar' }}
+      </button>
+    </div>
+
+    <div *ngIf="reserva() as reservaActual" class="reserve-box">
+      <p>Reservadas {{ reservaActual.numeroEntradas }} entradas.</p>
+      <p>Total reservado: {{ formatEuros(reservaActual.precioTotal) }} EUR</p>
+    </div>
+
+    <div *ngIf="paymentIntent()" class="payment-box">
+      <h2>Pago con Stripe</h2>
+      <div #paymentElementHost class="payment-element"></div>
+      <div class="actions">
+        <button
+          type="button"
+          class="primary"
+          [disabled]="procesandoPago()"
+          (click)="confirmarPago()"
+        >
+          {{ procesandoPago() ? 'Procesando...' : 'Confirmar pago' }}
+        </button>
+        <button type="button" class="secondary" [disabled]="procesandoPago()" (click)="cancelarReserva()">
+          Cancelar reserva
+        </button>
+      </div>
+    </div>
+
+    <div *ngIf="resultadoPago() as resultado" class="result-box">
+      <p class="status" [class.ok]="resultado.status === 'succeeded'">Estado: {{ resultado.status }}</p>
+      <p>{{ resultado.message }}</p>
+      <p>Total cobrado: {{ formatEuros(resultado.amount) }} {{ resultado.currency.toUpperCase() }}</p>
+      <a routerLink="/" class="back-link">Volver al catalogo</a>
+    </div>
+  </article>
+</section>

@@ -1,0 +1,35 @@
+<section class="result-shell">
+  <article class="result-card">
+    <p class="eyebrow">Resultado del pago</p>
+    <h1>Compra de entradas</h1>
+
+    <p *ngIf="cargando()">Comprobando el estado del pago...</p>
+
+    <div *ngIf="!cargando() && resultado() as pago" class="result-box">
+      <p class="status" [class.ok]="pago.status === 'succeeded'">
+        Estado: {{ pago.status }}
+      </p>
+      <p>{{ pago.message }}</p>
+      <p>Total: {{ formatEuros(pago.amount) }} {{ pago.currency.toUpperCase() }}</p>
+      <p *ngIf="pago.entradasConfirmadas > 0">
+        Entradas confirmadas: {{ pago.entradasConfirmadas }}
+      </p>
+    </div>
+
+    <div *ngIf="!cargando() && error()" class="error-box">
+      {{ error() }}
+    </div>
+
+    <div class="actions">
+      <button
+        *ngIf="resultado() && resultado()!.status !== 'succeeded'"
+        type="button"
+        class="secondary"
+        (click)="liberarReservas()"
+      >
+        Liberar reservas
+      </button>
+      <a routerLink="/" class="primary-link">Volver al catalogo</a>
+    </div>
+  </article>
+</section>
