@@ -1,44 +1,495 @@
-<h1>Espectaculos</h1>
-<button (click)="getEscenarios()" [disabled]="cargandoEscenarios()">
-  {{ cargandoEscenarios() ? 'Cargando...' : 'Ver escenarios' }}
-</button>
+<main class="home-shell">
+  <nav class="topbar" aria-label="Principal">
+    <a class="brand" href="/" aria-label="Inicio de ESI Entradas">
+      <span class="brand-mark">E</span>
+      <span>ESI Entradas</span>
+    </a>
 
-<ol *ngIf="escenarios().length > 0">
-  <li *ngFor="let escenario of escenarios()">
-    <span
-      (click)="getEspectaculos(escenario)"
-      [style.cursor]="cargandoEspectaculos() ? 'wait' : 'pointer'"
-      [style.opacity]="cargandoEspectaculos() && escenarioSeleccionado() === escenario ? '0.6' : '1'"
-    >
-      {{ escenario.nombre }} - {{ escenario.descripcion }}
-    </span>
+    <div class="access-area">
+      <span class="profile-badge" aria-hidden="true">
+        <span class="profile-icon"></span>
+      </span>
+      <button type="button" class="access-button" (click)="abrirCuenta()">
+        {{ isLoggedIn() ? 'Mi cuenta' : 'Accede/Registrate' }}
+      </button>
+    </div>
+  </nav>
 
-    <span *ngIf="cargandoEspectaculos() && escenarioSeleccionado() === escenario">
-      Cargando espectaculos...
-    </span>
-
-    <ul *ngIf="escenarioSeleccionado() === escenario && escenario.espectaculos && escenario.espectaculos.length > 0">
-      <li *ngFor="let espectaculo of escenario.espectaculos">
-        <span
-          (click)="getNumeroDeEntradas(espectaculo)"
-          [style.cursor]="cargandoEntradas() ? 'wait' : 'pointer'"
-          [style.opacity]="cargandoEntradas() && espectaculoSeleccionado() === espectaculo ? '0.6' : '1'"
+  <section class="search-band" aria-label="Busqueda de entradas">
+    <form class="search-panel" (ngSubmit)="buscarDesdeBarra()">
+      <label class="date-filter" aria-label="Seleccionar fechas">
+        <span class="calendar-icon" aria-hidden="true"></span>
+        <span>
+          <strong>Fechas</strong>
+          <input
+            type="date"
+            name="fechaBusqueda"
+            [ngModel]="searchDate()"
+            (ngModelChange)="searchDate.set($event)"
+          />
+        </span>
+        <button
+          type="button"
+          class="clear-date"
+          *ngIf="searchDate()"
+          aria-label="Quitar fecha"
+          (click)="limpiarFecha()"
         >
-          {{ espectaculo.artista }} - {{ espectaculo.fecha }}
-        </span>
+          x
+        </button>
+      </label>
 
-        <span *ngIf="cargandoEntradas() && espectaculoSeleccionado() === espectaculo">
-          Cargando entradas...
+      <label class="artist-search">
+        <span class="search-icon" aria-hidden="true"></span>
+        <span>
+          <strong>Buscar</strong>
+          <input
+            type="search"
+            name="terminoBusqueda"
+            placeholder="Artista, Evento o Recinto"
+            [ngModel]="searchTerm()"
+            (ngModelChange)="searchTerm.set($event)"
+            (focus)="searchFocused.set(true)"
+            (blur)="searchFocused.set(false)"
+            autocomplete="off"
+          />
         </span>
+      </label>
 
-        <span *ngIf="espectaculoSeleccionado() === espectaculo && espectaculo.entradas && !cargandoEntradas()">
-          Hay {{ espectaculo.entradas.total }} entradas, de las cuales
-          <button type="button" class="link-button" (click)="irAComprarEntradas(espectaculo)">
-            {{ espectaculo.entradas.libres }}
+      <button type="submit" class="search-submit">
+        {{ searchLoading() ? 'Buscando...' : 'Buscar' }}
+      </button>
+
+      <div class="search-suggestions" *ngIf="searchFocused() && sugerenciasBusqueda().length > 0">
+        <button
+          type="button"
+          class="suggestion-item"
+          *ngFor="let espectaculo of sugerenciasBusqueda()"
+          (mousedown)="$event.preventDefault()"
+          (click)="seleccionarSugerencia(espectaculo)"
+        >
+          <span>
+            <strong>{{ espectaculo.artista }}</strong>
+            <small>{{ espectaculo.escenario }}</small>
+          </span>
+          <em>{{ formatFecha(espectaculo.fecha).dia }} {{ formatFecha(espectaculo.fecha).mes }}</em>
+        </button>
+      </div>
+    </form>
+  </section>
+
+  <section class="hero">
+    <div class="hero-copy">
+      <p class="eyebrow">Taquilla digital segura</p>
+      <h1>Compra entradas para tus espectaculos favoritos</h1>
+      <p class="hero-text">
+        Busca conciertos, teatros y eventos con reserva temporal de entradas y acceso con cuenta
+        segura.
+      </p>
+    </div>
+  </section>
+
+  <section class="discover">
+    <div class="section-heading">
+      <p>Explora</p>
+      <h2>Todos los espectaculos disponibles</h2>
+    </div>
+
+    <p class="muted-state" *ngIf="exploraLoading()">Cargando espectaculos...</p>
+    <p class="auth-error" *ngIf="exploraError()">{{ exploraError() }}</p>
+    <p class="muted-state" *ngIf="!exploraLoading() && !exploraError() && espectaculosExplora().length === 0">
+      No hay espectaculos disponibles todavia.
+    </p>
+
+    <div class="event-grid">
+      <button
+        type="button"
+        class="explore-card"
+        *ngFor="let espectaculo of espectaculosExplora()"
+        (click)="verEntradas(espectaculo)"
+      >
+        <span class="event-type">{{ formatFecha(espectaculo.fecha).dia }} {{ formatFecha(espectaculo.fecha).mes }}</span>
+        <h3>{{ espectaculo.artista }}</h3>
+        <p>{{ espectaculo.escenario }}</p>
+        <small>{{ formatFecha(espectaculo.fecha).semana }} - {{ formatFecha(espectaculo.fecha).hora }}</small>
+      </button>
+    </div>
+  </section>
+
+  <section class="results-section" *ngIf="searchTouched() || espectaculoActivo()" aria-label="Resultados de busqueda">
+    <div class="results-card" *ngIf="searchTouched()">
+      <div class="results-toolbar">
+        <div>
+          <span class="results-kicker">Fechas</span>
+          <strong>{{ searchDate() ? searchDate() : 'Todas las fechas' }}</strong>
+        </div>
+        <button type="button" class="secondary-button" (click)="buscarDesdeBarra()">
+          Actualizar
+        </button>
+      </div>
+
+      <h2>
+        {{
+          searchTerm().trim()
+            ? 'Resultados para ' + searchTerm().trim()
+            : 'Conciertos en Espana'
+        }}
+      </h2>
+
+      <p class="auth-error" *ngIf="searchError()">{{ searchError() }}</p>
+      <p class="muted-state" *ngIf="searchLoading()">Cargando espectaculos...</p>
+      <p class="muted-state" *ngIf="!searchLoading() && !searchError() && resultadosBusqueda().length === 0">
+        No hay espectaculos para esa busqueda.
+      </p>
+
+      <div class="event-list" *ngIf="!searchLoading() && resultadosBusqueda().length > 0">
+        <article class="result-item" *ngFor="let espectaculo of resultadosBusqueda()">
+          <div class="date-box">
+            <span>{{ formatFecha(espectaculo.fecha).mes }}</span>
+            <strong>{{ formatFecha(espectaculo.fecha).dia }}</strong>
+          </div>
+
+          <div class="result-info">
+            <p>
+              {{ formatFecha(espectaculo.fecha).semana }} · {{ formatFecha(espectaculo.fecha).hora }}
+              <span class="info-dot">i</span>
+            </p>
+            <h3>{{ espectaculo.escenario }}</h3>
+            <p>{{ espectaculo.artista }}</p>
+            <span class="availability">Disponibilidad limitada</span>
+          </div>
+
+          <button type="button" class="tickets-button" (click)="verEntradas(espectaculo)">
+            Entradas
+            <span aria-hidden="true"></span>
           </button>
-          estan libres.
+        </article>
+      </div>
+    </div>
+
+    <div class="ticket-panel" *ngIf="espectaculoActivo()">
+      <div class="ticket-heading">
+        <div>
+          <span class="results-kicker">Ubicaciones disponibles</span>
+          <h2>{{ espectaculoActivo()?.artista }}</h2>
+          <p>{{ espectaculoActivo()?.escenario }} · {{ formatFecha(espectaculoActivo()!.fecha).dia }} {{ formatFecha(espectaculoActivo()!.fecha).mes }} · {{ formatFecha(espectaculoActivo()!.fecha).hora }}</p>
+        </div>
+        <button type="button" class="close-inline" (click)="espectaculoActivo.set(null)">
+          x
+        </button>
+      </div>
+
+      <p class="muted-state" *ngIf="entradasLoading()">Cargando entradas disponibles...</p>
+      <p class="auth-error" *ngIf="entradasError()">{{ entradasError() }}</p>
+      <p class="muted-state" *ngIf="!entradasLoading() && !entradasError() && entradasDisponibles().length === 0">
+        No quedan entradas disponibles para este espectaculo.
+      </p>
+
+      <div class="seat-grid" *ngIf="!entradasLoading() && entradasDisponibles().length > 0">
+        <article class="seat-card" *ngFor="let entrada of entradasDisponibles()">
+          <span>{{ tipoUbicacion(entrada) }}</span>
+          <h3>{{ entrada.descripcion }}</h3>
+          <p>{{ formatEuros(entrada.precio) }}</p>
+          <button
+            type="button"
+            class="secondary-button"
+            [class.selected]="isEntradaSeleccionada(entrada.id)"
+            [disabled]="!!paymentIntent()"
+            (click)="toggleEntradaCompra(entrada)"
+          >
+            {{ isEntradaSeleccionada(entrada.id) ? 'Seleccionada' : 'Seleccionar' }}
+          </button>
+        </article>
+      </div>
+
+      <div class="checkout-box" *ngIf="entradasDisponibles().length > 0">
+        <div>
+          <span class="results-kicker">Compra</span>
+          <strong>{{ entradasSeleccionadasCompra().length }} entrada(s) seleccionada(s)</strong>
+          <p>Total: {{ formatEuros(totalSeleccionado()) }}</p>
+        </div>
+        <button
+          type="button"
+          class="tickets-button"
+          [disabled]="entradasSeleccionadasCompra().length === 0 || reservandoCompra() || !!paymentIntent()"
+          (click)="reservarYPagar()"
+        >
+          {{ reservandoCompra() ? 'Reservando...' : 'Reservar y pagar' }}
+          <span aria-hidden="true"></span>
+        </button>
+      </div>
+
+      <div class="reserve-status" *ngIf="reservaActual() as reserva">
+        <div>
+          <strong>Reserva temporal activa</strong>
+          <p>
+            Tienes {{ reservaTiempo() }} para completar el pago. Despues las entradas se liberan automaticamente.
+          </p>
+          <p>{{ reserva.numeroEntradas }} entrada(s) reservada(s) - {{ formatEuros(reserva.precioTotal) }}</p>
+        </div>
+        <button type="button" class="secondary-button" [disabled]="procesandoPago()" (click)="cancelarReserva()">
+          Cancelar reserva
+        </button>
+      </div>
+
+      <div class="payment-box" *ngIf="paymentIntent()">
+        <h3>Pago seguro con Stripe</h3>
+        <div #paymentElementHost class="payment-element"></div>
+        <div class="payment-actions">
+          <button
+            type="button"
+            class="tickets-button"
+            [disabled]="procesandoPago()"
+            (click)="confirmarPago()"
+          >
+            {{ procesandoPago() ? 'Procesando...' : 'Confirmar pago' }}
+            <span aria-hidden="true"></span>
+          </button>
+        </div>
+      </div>
+
+      <p class="auth-error" *ngIf="compraError()">{{ compraError() }}</p>
+      <div class="result-box" *ngIf="resultadoPago() as resultado">
+        <strong [class.ok]="resultado.status === 'succeeded'">Estado: {{ resultado.status }}</strong>
+        <p>{{ resultado.message }}</p>
+        <p>Total cobrado: {{ formatEuros(resultado.amount) }} {{ resultado.currency.toUpperCase() }}</p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div class="modal-backdrop" *ngIf="authModalOpen()" (click)="cerrarAuthModal()">
+  <section
+    class="auth-modal"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="auth-title"
+    (click)="$event.stopPropagation()"
+  >
+    <button type="button" class="close-button" aria-label="Cerrar" (click)="cerrarAuthModal()">
+      x
+    </button>
+
+    <div class="auth-tabs" aria-label="Tipo de acceso">
+      <button type="button" [class.active]="authMode() === 'login'" (click)="authMode.set('login')">
+        Iniciar sesion
+      </button>
+      <button
+        type="button"
+        [class.active]="authMode() === 'register'"
+        (click)="authMode.set('register')"
+      >
+        Registrarse
+      </button>
+    </div>
+
+    <h2 id="auth-title">{{ authMode() === 'login' ? 'Bienvenida de nuevo' : 'Crea tu cuenta' }}</h2>
+    <p>
+      {{
+        authMode() === 'login'
+          ? 'Accede para continuar con tus reservas y compras.'
+          : 'Usa un correo valido y una contrasena robusta para comprar entradas.'
+      }}
+    </p>
+
+    <form class="auth-form" (ngSubmit)="submitAuth()">
+      <div class="form-grid" *ngIf="authMode() === 'register'">
+        <label>
+          Nombre
+          <input
+            type="text"
+            name="nombre"
+            maxlength="80"
+            placeholder="Tu nombre"
+            [ngModel]="registerNombre()"
+            (ngModelChange)="registerNombre.set($event)"
+          />
+        </label>
+
+        <label>
+          Apellidos
+          <input
+            type="text"
+            name="apellidos"
+            maxlength="120"
+            placeholder="Tus apellidos"
+            [ngModel]="registerApellidos()"
+            (ngModelChange)="registerApellidos.set($event)"
+          />
+        </label>
+      </div>
+
+      <div class="form-grid" *ngIf="authMode() === 'register'">
+        <label>
+          Alias
+          <input
+            type="text"
+            name="username"
+            maxlength="60"
+            placeholder="Opcional"
+            [ngModel]="registerUsername()"
+            (ngModelChange)="registerUsername.set($event)"
+          />
+        </label>
+
+        <label>
+          Fecha de nacimiento
+          <input
+            type="date"
+            name="fechaNacimiento"
+            [ngModel]="registerFechaNacimiento()"
+            (ngModelChange)="registerFechaNacimiento.set($event)"
+          />
+        </label>
+      </div>
+
+      <label>
+        Correo electronico
+        <input
+          type="email"
+          name="email"
+          placeholder="tu@email.com"
+          [ngModel]="authEmail()"
+          (ngModelChange)="authEmail.set($event)"
+        />
+      </label>
+
+      <label>
+        Contrasena
+        <span class="password-input">
+          <input
+            [type]="showPassword() ? 'text' : 'password'"
+            name="password"
+            placeholder="Minimo 12 caracteres"
+            autocomplete="new-password"
+            [ngModel]="authPassword()"
+            (ngModelChange)="authPassword.set($event)"
+          />
+          <button
+            type="button"
+            class="eye-button"
+            [class.visible]="showPassword()"
+            aria-label="Mostrar u ocultar contrasena"
+            (click)="showPassword.set(!showPassword())"
+          >
+            <span class="eye-icon" aria-hidden="true"></span>
+          </button>
         </span>
-      </li>
-    </ul>
-  </li>
-</ol>
+      </label>
+
+      <label *ngIf="authMode() === 'register'">
+        Repetir contrasena
+        <span class="password-input">
+          <input
+            [type]="showPasswordRepeat() ? 'text' : 'password'"
+            name="passwordRepeat"
+            placeholder="Confirma tu contrasena"
+            autocomplete="new-password"
+            [ngModel]="authPasswordRepeat()"
+            (ngModelChange)="authPasswordRepeat.set($event)"
+          />
+          <button
+            type="button"
+            class="eye-button"
+            [class.visible]="showPasswordRepeat()"
+            aria-label="Mostrar u ocultar confirmacion de contrasena"
+            (click)="showPasswordRepeat.set(!showPasswordRepeat())"
+          >
+            <span class="eye-icon" aria-hidden="true"></span>
+          </button>
+        </span>
+      </label>
+
+      <app-password-rules
+        *ngIf="authMode() === 'register'"
+        [password]="authPassword()"
+        [confirmPassword]="authPasswordRepeat()"
+        [username]="registerUsername()"
+        [nombre]="registerNombre()"
+        [apellidos]="registerApellidos()"
+        [email]="authEmail()"
+        [fechaNacimiento]="registerFechaNacimiento()"
+      />
+
+      <p class="auth-error" *ngIf="authError()">{{ authError() }}</p>
+      <p class="auth-success" *ngIf="authMessage()">{{ authMessage() }}</p>
+
+      <button
+        type="submit"
+        class="primary-button auth-submit"
+        [disabled]="authSubmitting() || (authMode() === 'register' && !canRegister())"
+      >
+        {{
+          authSubmitting()
+            ? 'Enviando...'
+            : authMode() === 'login'
+              ? 'Entrar'
+              : 'Crear cuenta segura'
+        }}
+      </button>
+    </form>
+
+    <button type="button" class="forgot-button" *ngIf="authMode() === 'login'" (click)="irARecuperarPassword()">
+      He olvidado mi contrasena
+    </button>
+  </section>
+</div>
+
+<div class="account-backdrop" *ngIf="accountPanelOpen()" (click)="cerrarCuenta()">
+  <aside class="account-panel" aria-label="Mi cuenta" (click)="$event.stopPropagation()">
+    <header class="account-header">
+      <h2>Mi Cuenta</h2>
+      <button type="button" class="account-close" aria-label="Cerrar mi cuenta" (click)="cerrarCuenta()">
+        x
+      </button>
+    </header>
+
+    <section class="account-welcome">
+      <p>Bienvenido de nuevo!</p>
+      <strong>{{ userDisplayName() }}</strong>
+    </section>
+
+    <section class="account-section">
+      <button type="button" class="account-row" (click)="entradasOpen.set(!entradasOpen())">
+        <span class="account-icon ticket-mini" aria-hidden="true"></span>
+        <strong>Mis entradas</strong>
+        <span class="account-chevron" [class.open]="entradasOpen()"></span>
+      </button>
+      <div class="account-submenu" *ngIf="entradasOpen()">
+        <button type="button">Proximos eventos</button>
+        <button type="button">Eventos pasados</button>
+      </div>
+    </section>
+
+    <section class="account-section">
+      <button type="button" class="account-row" (click)="perfilOpen.set(!perfilOpen())">
+        <span class="account-icon profile-mini" aria-hidden="true"></span>
+        <strong>Mi Perfil</strong>
+        <span class="account-chevron" [class.open]="perfilOpen()"></span>
+      </button>
+      <div class="account-submenu compact" *ngIf="perfilOpen()">
+        <button type="button">Datos personales</button>
+        <button type="button">Correo de acceso</button>
+      </div>
+    </section>
+
+    <section class="account-section">
+      <button type="button" class="account-row" (click)="configOpen.set(!configOpen())">
+        <span class="account-icon settings-mini" aria-hidden="true"></span>
+        <strong>Mi Configuracion</strong>
+        <span class="account-chevron" [class.open]="configOpen()"></span>
+      </button>
+      <div class="account-submenu compact" *ngIf="configOpen()">
+        <button type="button">Preferencias</button>
+        <button type="button">Seguridad</button>
+      </div>
+    </section>
+
+    <section class="account-section">
+      <button type="button" class="account-row logout-row" (click)="cerrarSesion()">
+        <span class="account-icon logout-mini" aria-hidden="true"></span>
+        <strong>Cerrar sesion</strong>
+      </button>
+    </section>
+  </aside>
+</div>
