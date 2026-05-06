@@ -23,6 +23,7 @@ import { PaymentIntentResponse, PaymentResult, ReservaResponse } from '../compra
 })
 export class Espectaculos implements OnInit, OnDestroy {
     @ViewChild('paymentElementHost') paymentElementHost?: ElementRef<HTMLDivElement>;
+    private static readonly AUTH_STORAGE_KEY = 'esi.auth.session';
 
     authModalOpen = signal(false);
     accountPanelOpen = signal(false);
@@ -46,10 +47,14 @@ export class Espectaculos implements OnInit, OnDestroy {
     configOpen = signal(false);
     searchTerm = signal('');
     searchDate = signal('');
+    searchDateText = signal('');
     searchFocused = signal(false);
     searchTouched = signal(false);
     searchLoading = signal(false);
     searchError = signal('');
+    appliedSearchTerm = signal('');
+    appliedSearchDate = signal('');
+    resultsDateText = signal('');
     resultadosBusqueda = signal<EspectaculoResultado[]>([]);
     espectaculosExplora = signal<EspectaculoResultado[]>([]);
     exploraLoading = signal(false);
@@ -59,6 +64,11 @@ export class Espectaculos implements OnInit, OnDestroy {
     entradasLoading = signal(false);
     entradasError = signal('');
     entradasSeleccionadasCompra = signal<number[]>([]);
+    entradaOrden = signal<'default' | 'priceAsc' | 'visibility'>('default');
+    filtroZona = signal('');
+    filtroPlanta = signal('');
+    filtroFila = signal('');
+    filtroButaca = signal('');
     reservaActual = signal<ReservaResponse | null>(null);
     paymentIntent = signal<PaymentIntentResponse | null>(null);
     resultadoPago = signal<PaymentResult | null>(null);
@@ -84,6 +94,28 @@ export class Espectaculos implements OnInit, OnDestroy {
             })
             .slice(0, 6);
     });
+    espectaculosExploraAgrupados = computed(() => this.groupByArtist(this.espectaculosExplora()));
+    entradasFiltradas = computed(() => {
+        let entradas = this.entradasDisponibles().filter((entrada) => {
+            const detalle = this.detalleEntrada(entrada);
+            return (!this.filtroZona() || detalle.zona === this.filtroZona())
+                && (!this.filtroPlanta() || detalle.planta === this.filtroPlanta())
+                && (!this.filtroFila() || detalle.fila === this.filtroFila())
+                && (!this.filtroButaca() || detalle.butaca === this.filtroButaca());
+        });
+
+        if (this.entradaOrden() === 'priceAsc') {
+            entradas = [...entradas].sort((a, b) => a.precio - b.precio);
+        } else if (this.entradaOrden() === 'visibility') {
+            entradas = [...entradas].sort((a, b) => this.visibilityRank(a) - this.visibilityRank(b));
+        }
+
+        return entradas;
+    });
+    zonasDisponibles = computed(() => this.uniqueEntradaValues('zona'));
+    plantasDisponibles = computed(() => this.uniqueEntradaValues('planta'));
+    filasDisponibles = computed(() => this.uniqueEntradaValues('fila'));
+    butacasDisponibles = computed(() => this.uniqueEntradaValues('butaca'));
     escenarios = signal<any[]>([]);
     escenarioSeleccionado = signal<any | null>(null);
     espectaculoSeleccionado = signal<any | null>(null);
@@ -108,6 +140,7 @@ export class Espectaculos implements OnInit, OnDestroy {
     private paymentElement: any = null;
 
     ngOnInit(){
+        this.restoreAuthSession();
         this.cargarSesion();
         this.cargarExplora();
     }
@@ -175,6 +208,7 @@ export class Espectaculos implements OnInit, OnDestroy {
         this.authEmail.set('');
         this.authPassword.set('');
         this.authPasswordRepeat.set('');
+        this.clearStoredAuthSession();
     }
 
     private cargarSesion(){
@@ -198,6 +232,12 @@ export class Espectaculos implements OnInit, OnDestroy {
         this.searchFocused.set(false);
         this.searchLoading.set(true);
         this.searchError.set('');
+        const normalizedSearchDate = this.normalizeDateText(this.searchDateText());
+        this.searchDateText.set(normalizedSearchDate);
+        this.searchDate.set(this.parseDateText(normalizedSearchDate));
+        this.resultsDateText.set(normalizedSearchDate);
+        this.appliedSearchTerm.set(this.searchTerm().trim());
+        this.appliedSearchDate.set(this.searchDate());
         this.espectaculoActivo.set(null);
         this.entradasDisponibles.set([]);
         this.entradasError.set('');
@@ -219,7 +259,6 @@ export class Espectaculos implements OnInit, OnDestroy {
         this.searchTouched.set(true);
         this.searchLoading.set(false);
         this.searchError.set('');
-        this.resultadosBusqueda.set(this.filtrarPorFecha([espectaculo]));
         this.resetCompraState();
         this.espectaculoActivo.set(espectaculo);
         this.entradasDisponibles.set([]);
@@ -229,6 +268,7 @@ export class Espectaculos implements OnInit, OnDestroy {
         this.espectaculoService.getEntradasDisponibles(espectaculo.id).subscribe({
             next: (entradas) => {
                 this.entradasDisponibles.set(entradas);
+                this.resetEntradaFilters();
                 this.entradasLoading.set(false);
             },
             error: () => {
@@ -238,17 +278,95 @@ export class Espectaculos implements OnInit, OnDestroy {
         });
     }
 
+    abrirEspectaculoExplora(espectaculo: EspectaculoResultado){
+        const artista = this.baseArtistName(espectaculo.artista);
+        const artistaKey = this.baseArtistKey(espectaculo.artista);
+        this.searchTerm.set(artista);
+        this.searchDate.set('');
+        this.searchDateText.set('');
+        this.resultsDateText.set('');
+        this.appliedSearchTerm.set(artista);
+        this.appliedSearchDate.set('');
+        this.searchTouched.set(true);
+        this.searchFocused.set(false);
+        this.searchLoading.set(false);
+        this.searchError.set('');
+        this.espectaculoActivo.set(null);
+        this.entradasDisponibles.set([]);
+        this.entradasError.set('');
+        this.resultadosBusqueda.set(
+            this.espectaculosExplora().filter((item) => this.baseArtistKey(item.artista) === artistaKey),
+        );
+    }
+
     limpiarFecha(){
         this.searchDate.set('');
+        this.searchDateText.set('');
+        this.resultsDateText.set('');
         if (this.searchTouched()) {
             this.buscarDesdeBarra();
         }
+    }
+
+    onSearchDateTextChange(value: string){
+        const text = this.formatDateText(value);
+        this.searchDateText.set(text);
+        this.searchDate.set(this.parseDateText(text));
+    }
+
+    setSearchDateFromPicker(value: string){
+        this.searchDate.set(value);
+        this.searchDateText.set(this.isoToDateText(value));
+    }
+
+    onResultsDateTextChange(value: string){
+        const text = this.formatDateText(value);
+        this.resultsDateText.set(text);
+        this.searchDate.set(this.parseDateText(text));
+    }
+
+    setResultsDateFromPicker(value: string){
+        this.searchDate.set(value);
+        this.resultsDateText.set(this.isoToDateText(value));
+    }
+
+    volverInicio(){
+        this.searchTerm.set('');
+        this.searchDate.set('');
+        this.searchDateText.set('');
+        this.resultsDateText.set('');
+        this.appliedSearchTerm.set('');
+        this.appliedSearchDate.set('');
+        this.searchFocused.set(false);
+        this.searchTouched.set(false);
+        this.searchLoading.set(false);
+        this.searchError.set('');
+        this.resultadosBusqueda.set([]);
+        this.espectaculoActivo.set(null);
+        this.entradasDisponibles.set([]);
+        this.entradasLoading.set(false);
+        this.entradasError.set('');
+        this.resetCompraState();
+        this.cargarExplora();
+    }
+
+    volverAResultados(){
+        this.resetCompraState();
+        this.espectaculoActivo.set(null);
+        this.entradasDisponibles.set([]);
+        this.entradasLoading.set(false);
+        this.entradasError.set('');
+        this.resetEntradaFilters();
     }
 
     seleccionarSugerencia(espectaculo: EspectaculoResultado){
         this.searchTerm.set(espectaculo.artista);
         this.searchTouched.set(true);
         this.searchFocused.set(false);
+        this.searchDateText.set(this.isoToDateText(this.searchDate()));
+        this.resultsDateText.set(this.isoToDateText(this.searchDate()));
+        this.appliedSearchTerm.set(espectaculo.artista);
+        this.appliedSearchDate.set(this.searchDate());
         this.resultadosBusqueda.set(this.filtrarPorFecha([espectaculo]));
         this.verEntradas(espectaculo);
     }
@@ -315,6 +433,14 @@ export class Espectaculos implements OnInit, OnDestroy {
         return this.entradasDisponibles()
             .filter((entrada) => seleccion.has(entrada.id))
             .reduce((total, entrada) => total + entrada.precio, 0);
+    }
+
+    aplicarFechaResultados(){
+        const normalizedDate = this.normalizeDateText(this.resultsDateText());
+        this.resultsDateText.set(normalizedDate);
+        this.searchDate.set(this.parseDateText(normalizedDate));
+        this.searchDateText.set(normalizedDate);
+        this.buscarDesdeBarra();
     }
 
     reservaTiempo() {
@@ -498,6 +624,99 @@ export class Espectaculos implements OnInit, OnDestroy {
         this.reservaSeconds.set(0);
     }
 
+    private resetEntradaFilters(){
+        this.entradaOrden.set('default');
+        this.filtroZona.set('');
+        this.filtroPlanta.set('');
+        this.filtroFila.set('');
+        this.filtroButaca.set('');
+    }
+
+    private uniqueEntradaValues(field: 'zona' | 'planta' | 'fila' | 'butaca'){
+        return Array.from(
+            new Set(
+                this.entradasDisponibles()
+                    .map((entrada) => this.detalleEntrada(entrada)[field])
+                    .filter((value): value is string => !!value),
+            ),
+        ).sort((a, b) => Number(a) - Number(b));
+    }
+
+    private detalleEntrada(entrada: EntradaDisponible){
+        const descripcion = entrada.descripcion;
+
+        return {
+            zona: this.matchValue(descripcion, /zona\s+(\d+)/i),
+            planta: this.matchValue(descripcion, /planta\s+(\d+)/i),
+            fila: this.matchValue(descripcion, /fila\s+(\d+)/i),
+            butaca: this.matchValue(descripcion, /columna\s+(\d+)/i),
+        };
+    }
+
+    private matchValue(value: string, pattern: RegExp){
+        return value.match(pattern)?.[1] ?? '';
+    }
+
+    private formatDateText(value: string){
+        const digits = value.replace(/\D/g, '').slice(0, 8);
+        const day = digits.slice(0, 2);
+        const month = digits.slice(2, 4);
+        const year = digits.slice(4, 8);
+
+        if (digits.length <= 2) {
+            return digits.length === 2 ? `${day}/` : day;
+        }
+        if (digits.length <= 4) {
+            return digits.length === 4 ? `${day}/${month}/` : `${day}/${month}`;
+        }
+        return `${day}/${month}/${year}`;
+    }
+
+    private parseDateText(value: string){
+        return this.dateTextToIso(this.normalizeDateText(value));
+    }
+
+    private normalizeDateText(value: string){
+        const trimmed = value.trim();
+        if (/^\d{8}$/.test(trimmed)) {
+            return this.formatDateText(trimmed);
+        }
+        return trimmed;
+    }
+
+    private dateTextToIso(value: string){
+        const match = value.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+        if (!match) {
+            return '';
+        }
+
+        const [, day, month, year] = match;
+        return `${year}-${month}-${day}`;
+    }
+
+    private isoToDateText(value: string){
+        const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (!match) {
+            return '';
+        }
+
+        const [, year, month, day] = match;
+        return `${day}/${month}/${year}`;
+    }
+
+    private visibilityRank(entrada: EntradaDisponible){
+        const detalle = this.detalleEntrada(entrada);
+
+        if (detalle.zona) {
+            return Number(detalle.zona);
+        }
+        if (detalle.planta) {
+            return Number(detalle.planta) * 100 + Number(detalle.fila || 0) * 10 + Number(detalle.butaca || 0);
+        }
+
+        return entrada.precio;
+    }
+
     private getHttpErrorMessage(error: unknown) {
         const httpError = error as { error?: { message?: string } | string; message?: string };
         if (typeof httpError?.error === 'string') {
@@ -521,6 +740,27 @@ export class Espectaculos implements OnInit, OnDestroy {
             .normalize('NFD')
             .replace(/[\u0300-\u036f]/g, '')
             .trim();
+    }
+
+    private groupByArtist(espectaculos: EspectaculoResultado[]){
+        const grouped = new Map<string, EspectaculoResultado>();
+
+        for (const espectaculo of espectaculos) {
+            const key = this.baseArtistKey(espectaculo.artista);
+            if (!grouped.has(key)) {
+                grouped.set(key, { ...espectaculo, artista: this.baseArtistName(espectaculo.artista) });
+            }
+        }
+
+        return Array.from(grouped.values());
+    }
+
+    private baseArtistKey(artista: string){
+        return this.normalizeText(this.baseArtistName(artista));
+    }
+
+    private baseArtistName(artista: string){
+        return artista.split(/\s+-\s+/)[0].trim();
     }
 
     passwordsMatch(){
@@ -589,10 +829,65 @@ export class Espectaculos implements OnInit, OnDestroy {
 
     private completeLogin(){
         this.isLoggedIn.set(true);
-        this.userDisplayName.set(this.getDisplayName());
+        const displayName = this.getDisplayName();
+        this.userDisplayName.set(displayName);
+        this.storeAuthSession(displayName, this.authEmail().trim());
         this.authPassword.set('');
         this.authPasswordRepeat.set('');
         this.cerrarAuthModal();
+    }
+
+    private restoreAuthSession(){
+        if (!this.isBrowser()) {
+            return;
+        }
+
+        const rawSession = localStorage.getItem(Espectaculos.AUTH_STORAGE_KEY);
+        if (!rawSession) {
+            return;
+        }
+
+        try {
+            const session = JSON.parse(rawSession) as { displayName?: string; email?: string };
+            if (!session.displayName || !session.email) {
+                this.clearStoredAuthSession();
+                return;
+            }
+
+            this.isLoggedIn.set(true);
+            this.userDisplayName.set(session.displayName);
+            this.authEmail.set(session.email);
+        } catch {
+            this.clearStoredAuthSession();
+        }
+    }
+
+    private storeAuthSession(displayName: string, email: string){
+        if (!this.isBrowser()) {
+            return;
+        }
+
+        localStorage.setItem(Espectaculos.AUTH_STORAGE_KEY, JSON.stringify({ displayName, email }));
+    }
+
+    private clearStoredAuthSession(){
+        if (!this.isBrowser()) {
+            return;
+        }
+
+        localStorage.removeItem(Espectaculos.AUTH_STORAGE_KEY);
+    }
+
+    private isBrowser(){
+        return isPlatformBrowser(this.platformId);
+    }
+
+    private getAuthErrorMessage(error: any){
+        if (typeof error?.error === 'string') {
+            return error.error;
+        }
+
+        return error?.error?.message || 'No se ha podido completar la operacion.';
     }
 
     private getDisplayName(){

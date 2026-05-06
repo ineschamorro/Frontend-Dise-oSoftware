@@ -108,6 +108,12 @@ button:disabled {
   padding: 1rem 1.5rem 0.9rem;
 }
 
+.top-return {
+  margin: 0 auto;
+  max-width: 1180px;
+  padding: 0.35rem 1.5rem 0;
+}
+
 .search-panel {
   align-items: stretch;
   background: rgba(255, 255, 255, 0.96);
@@ -172,6 +178,52 @@ button:disabled {
   width: 100%;
 }
 
+.date-filter span {
+  position: relative;
+}
+
+.search-date-picker {
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 1px;
+}
+
+.search-date-button {
+  background: transparent;
+  bottom: 0.05rem;
+  height: 1.8rem;
+  opacity: 1;
+  position: absolute;
+  right: 0;
+  z-index: 2;
+  width: 1.9rem;
+}
+
+.search-date-button::before {
+  border: 2px solid #111827;
+  border-radius: 0;
+  content: "";
+  height: 0.82rem;
+  left: 0.48rem;
+  position: absolute;
+  top: 0.5rem;
+  width: 0.82rem;
+}
+
+.search-date-button::after {
+  background: #111827;
+  content: "";
+  height: 2px;
+  left: 0.48rem;
+  position: absolute;
+  top: 0.72rem;
+  width: 0.82rem;
+}
+
 .artist-search input {
   border: 0;
   display: block;
@@ -182,33 +234,24 @@ button:disabled {
 }
 
 .calendar-icon {
-  border: 2px solid #e11d8f;
-  border-radius: 0.12rem;
-  height: 1.22rem;
-  position: relative;
-  width: 1.22rem;
+  color: #e11d8f;
+  display: inline-flex;
+  height: 1.55rem;
+  width: 1.55rem;
 }
 
-.calendar-icon::before,
-.calendar-icon::after {
-  background: #e11d8f;
-  content: "";
-  position: absolute;
+.calendar-icon svg {
+  display: block;
+  height: 100%;
+  width: 100%;
 }
 
-.calendar-icon::before {
-  height: 2px;
-  left: 0.12rem;
-  right: 0.12rem;
-  top: 0.32rem;
-}
-
-.calendar-icon::after {
-  height: 0.22rem;
-  left: 0.33rem;
-  top: -0.24rem;
-  width: 0.55rem;
-  box-shadow: 0.34rem 0 0 #e11d8f;
+.calendar-icon path {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: square;
+  stroke-linejoin: miter;
+  stroke-width: 2;
 }
 
 .chevron {
@@ -232,22 +275,24 @@ button:disabled {
 }
 
 .search-icon {
-  border: 2px solid #e11d8f;
-  border-radius: 50%;
-  height: 1.18rem;
-  position: relative;
-  width: 1.18rem;
+  color: #e11d8f;
+  display: inline-flex;
+  height: 1.55rem;
+  width: 1.55rem;
 }
 
-.search-icon::after {
-  background: #e11d8f;
-  content: "";
-  height: 0.55rem;
-  position: absolute;
-  right: -0.32rem;
-  top: 0.78rem;
-  transform: rotate(45deg);
-  width: 2px;
+.search-icon svg {
+  display: block;
+  height: 100%;
+  width: 100%;
+}
+
+.search-icon path {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
 }
 
 .search-submit,
@@ -438,7 +483,105 @@ h1 {
 .results-section {
   margin: 0 auto;
   max-width: 1180px;
-  padding: 0 1.5rem 4rem;
+  padding: 1rem 1.5rem 4rem;
+}
+
+.results-page-header {
+  align-items: end;
+  display: flex;
+  gap: 0.8rem;
+  justify-content: flex-start;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.back-home-button {
+  display: block;
+  font-size: 0.82rem;
+  min-height: 1.85rem;
+  padding: 0 0.58rem;
+  width: fit-content;
+}
+
+.results-date-filter {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.results-date-filter > span {
+  color: #4b5563;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.results-date-filter strong {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #a3a3a3;
+  border-radius: 0.18rem;
+  color: #111827;
+  display: flex;
+  gap: 0.9rem;
+  min-height: 3.4rem;
+  min-width: 18.5rem;
+  padding: 0 1rem;
+  position: relative;
+}
+
+.results-date-filter input {
+  border: 0;
+  color: #111827;
+  font-size: 1rem;
+  font-weight: 800;
+  outline: none;
+  width: 100%;
+}
+
+.results-date-text {
+  padding-right: 2.4rem;
+}
+
+.results-date-picker {
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 1px;
+}
+
+.results-date-button {
+  background: transparent;
+  height: 1.8rem;
+  opacity: 1;
+  position: absolute;
+  right: 0.8rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 1.9rem;
+  z-index: 2;
+}
+
+.results-date-button::before {
+  border: 2px solid #111827;
+  border-radius: 0;
+  content: "";
+  height: 0.82rem;
+  left: 0.48rem;
+  position: absolute;
+  top: 0.5rem;
+  width: 0.82rem;
+}
+
+.results-date-button::after {
+  background: #111827;
+  content: "";
+  height: 2px;
+  left: 0.48rem;
+  position: absolute;
+  top: 0.72rem;
+  width: 0.82rem;
 }
 
 .results-card,
@@ -629,6 +772,41 @@ h1 {
   gap: 0.9rem;
   grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
   margin-top: 1rem;
+}
+
+.ticket-filters {
+  align-items: end;
+  background: #f8fafc;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 0.75rem;
+  display: grid;
+  gap: 0.85rem;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  margin-top: 1rem;
+  padding: 1rem;
+}
+
+.ticket-filters label {
+  color: #475569;
+  display: grid;
+  font-size: 0.78rem;
+  font-weight: 900;
+  gap: 0.35rem;
+  text-transform: uppercase;
+}
+
+.ticket-filters select {
+  background: #ffffff;
+  border: 1px solid #d1d5db;
+  border-radius: 0.55rem;
+  color: #111827;
+  font-size: 0.95rem;
+  font-weight: 800;
+  min-height: 2.7rem;
+  outline: none;
+  padding: 0 0.75rem;
+  text-transform: none;
+  width: 100%;
 }
 
 .seat-card {
@@ -1243,4 +1421,7 @@ h1 {
   .form-grid {
     grid-template-columns: 1fr;
   }
+}
+.search-date-text {
+  padding-right: 2.4rem;
 }

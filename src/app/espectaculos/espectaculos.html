@@ -15,23 +15,53 @@
     </div>
   </nav>
 
+  <div class="top-return" *ngIf="searchTouched() || espectaculoActivo()">
+    <button type="button" class="secondary-button back-home-button" (click)="volverInicio()">
+      Inicio
+    </button>
+  </div>
+
   <section class="search-band" aria-label="Busqueda de entradas">
     <form class="search-panel" (ngSubmit)="buscarDesdeBarra()">
       <label class="date-filter" aria-label="Seleccionar fechas">
-        <span class="calendar-icon" aria-hidden="true"></span>
+        <span class="calendar-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" focusable="false">
+            <path d="M7 2v4M17 2v4M3 9h18M5 4h14a2 2 0 0 1 2 2v11l-5 5H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z" />
+            <path d="M16 22v-5h5M7 12h3v3H7z" />
+          </svg>
+        </span>
         <span>
           <strong>Fechas</strong>
           <input
-            type="date"
+            class="search-date-text"
+            type="text"
             name="fechaBusqueda"
+            inputmode="numeric"
+            maxlength="10"
+            placeholder="dd/mm/aaaa"
+            [ngModel]="searchDateText()"
+            (ngModelChange)="onSearchDateTextChange($event)"
+          />
+          <button
+            type="button"
+            class="search-date-button"
+            aria-label="Seleccionar fecha"
+            (click)="fechaBusquedaPicker.showPicker()"
+          ></button>
+          <input
+            #fechaBusquedaPicker
+            class="search-date-picker"
+            type="date"
+            tabindex="-1"
             [ngModel]="searchDate()"
-            (ngModelChange)="searchDate.set($event)"
+            [ngModelOptions]="{standalone: true}"
+            (ngModelChange)="setSearchDateFromPicker($event)"
           />
         </span>
         <button
           type="button"
           class="clear-date"
-          *ngIf="searchDate()"
+          *ngIf="searchDateText() || searchDate()"
           aria-label="Quitar fecha"
           (click)="limpiarFecha()"
         >
@@ -40,7 +70,12 @@
       </label>
 
       <label class="artist-search">
-        <span class="search-icon" aria-hidden="true"></span>
+        <span class="search-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" focusable="false">
+            <path d="M10.8 4.2 15 5.8l3.2 4.2-.8 5.1-4.2 3.2-5.1-.8-3.2-4.2.8-5.1 5.1-4Z" />
+            <path d="m16.5 16.5 4.2 4.2" />
+          </svg>
+        </span>
         <span>
           <strong>Buscar</strong>
           <input
@@ -78,7 +113,7 @@
     </form>
   </section>
 
-  <section class="hero">
+  <section class="hero" *ngIf="!searchTouched() && !espectaculoActivo()">
     <div class="hero-copy">
       <p class="eyebrow">Taquilla digital segura</p>
       <h1>Compra entradas para tus espectaculos favoritos</h1>
@@ -89,7 +124,7 @@
     </div>
   </section>
 
-  <section class="discover">
+  <section class="discover" *ngIf="!searchTouched() && !espectaculoActivo()">
     <div class="section-heading">
       <p>Explora</p>
       <h2>Todos los espectaculos disponibles</h2>
@@ -105,23 +140,65 @@
       <button
         type="button"
         class="explore-card"
-        *ngFor="let espectaculo of espectaculosExplora()"
-        (click)="verEntradas(espectaculo)"
+        *ngFor="let espectaculo of espectaculosExploraAgrupados()"
+        (click)="abrirEspectaculoExplora(espectaculo)"
       >
-        <span class="event-type">{{ formatFecha(espectaculo.fecha).dia }} {{ formatFecha(espectaculo.fecha).mes }}</span>
         <h3>{{ espectaculo.artista }}</h3>
         <p>{{ espectaculo.escenario }}</p>
-        <small>{{ formatFecha(espectaculo.fecha).semana }} - {{ formatFecha(espectaculo.fecha).hora }}</small>
+        <small>Ver fechas disponibles</small>
       </button>
     </div>
   </section>
 
   <section class="results-section" *ngIf="searchTouched() || espectaculoActivo()" aria-label="Resultados de busqueda">
-    <div class="results-card" *ngIf="searchTouched()">
+    <div class="results-page-header">
+      <label class="results-date-filter">
+        <span>Fechas</span>
+        <strong>
+          <span class="calendar-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" focusable="false">
+              <path d="M7 2v4M17 2v4M3 9h18M5 4h14a2 2 0 0 1 2 2v11l-5 5H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z" />
+              <path d="M16 22v-5h5M7 12h3v3H7z" />
+            </svg>
+          </span>
+          <input
+            class="results-date-text"
+            type="text"
+            name="fechaResultados"
+            inputmode="numeric"
+            maxlength="10"
+            placeholder="dd/mm/aaaa"
+            [ngModel]="resultsDateText()"
+            (ngModelChange)="onResultsDateTextChange($event)"
+          />
+          <button
+            type="button"
+            class="results-date-button"
+            aria-label="Seleccionar fecha"
+            (click)="fechaResultadosPicker.showPicker()"
+          ></button>
+          <input
+            #fechaResultadosPicker
+            class="results-date-picker"
+            type="date"
+            tabindex="-1"
+            aria-label="Seleccionar fecha"
+            [ngModel]="searchDate()"
+            [ngModelOptions]="{standalone: true}"
+            (ngModelChange)="setResultsDateFromPicker($event)"
+          />
+        </strong>
+      </label>
+      <button type="button" class="secondary-button" (click)="aplicarFechaResultados()">
+        Aplicar fecha
+      </button>
+    </div>
+
+    <div class="results-card" *ngIf="searchTouched() && !espectaculoActivo()">
       <div class="results-toolbar">
         <div>
           <span class="results-kicker">Fechas</span>
-          <strong>{{ searchDate() ? searchDate() : 'Todas las fechas' }}</strong>
+          <strong>{{ appliedSearchDate() ? appliedSearchDate() : 'Todas las fechas' }}</strong>
         </div>
         <button type="button" class="secondary-button" (click)="buscarDesdeBarra()">
           Actualizar
@@ -130,8 +207,8 @@
 
       <h2>
         {{
-          searchTerm().trim()
-            ? 'Resultados para ' + searchTerm().trim()
+          appliedSearchTerm()
+            ? 'Resultados para ' + appliedSearchTerm()
             : 'Conciertos en Espana'
         }}
       </h2>
@@ -139,7 +216,7 @@
       <p class="auth-error" *ngIf="searchError()">{{ searchError() }}</p>
       <p class="muted-state" *ngIf="searchLoading()">Cargando espectaculos...</p>
       <p class="muted-state" *ngIf="!searchLoading() && !searchError() && resultadosBusqueda().length === 0">
-        No hay espectaculos para esa busqueda.
+        No hay espectaculos disponibles para esa busqueda o fecha.
       </p>
 
       <div class="event-list" *ngIf="!searchLoading() && resultadosBusqueda().length > 0">
@@ -174,8 +251,8 @@
           <h2>{{ espectaculoActivo()?.artista }}</h2>
           <p>{{ espectaculoActivo()?.escenario }} · {{ formatFecha(espectaculoActivo()!.fecha).dia }} {{ formatFecha(espectaculoActivo()!.fecha).mes }} · {{ formatFecha(espectaculoActivo()!.fecha).hora }}</p>
         </div>
-        <button type="button" class="close-inline" (click)="espectaculoActivo.set(null)">
-          x
+        <button type="button" class="secondary-button" (click)="volverAResultados()">
+          Volver atras
         </button>
       </div>
 
@@ -185,8 +262,65 @@
         No quedan entradas disponibles para este espectaculo.
       </p>
 
-      <div class="seat-grid" *ngIf="!entradasLoading() && entradasDisponibles().length > 0">
-        <article class="seat-card" *ngFor="let entrada of entradasDisponibles()">
+      <div class="ticket-filters" *ngIf="!entradasLoading() && entradasDisponibles().length > 0">
+        <label>
+          Ordenar por
+          <select [ngModel]="entradaOrden()" (ngModelChange)="entradaOrden.set($event)">
+            <option value="default">Todas las entradas</option>
+            <option value="priceAsc">Mas barata</option>
+            <option value="visibility">Mejor ubicacion</option>
+          </select>
+        </label>
+
+        <label *ngIf="zonasDisponibles().length > 0">
+          Zona
+          <select [ngModel]="filtroZona()" (ngModelChange)="filtroZona.set($event)">
+            <option value="">Todas</option>
+            <option *ngFor="let zona of zonasDisponibles()" [value]="zona">
+              {{
+                zona === '1'
+                  ? 'Cerca del escenario'
+                  : zona === '2'
+                    ? 'Medio campo'
+                    : zona === '3'
+                      ? 'Campo contrario'
+                      : 'Zona ' + zona
+              }}
+            </option>
+          </select>
+        </label>
+
+        <label *ngIf="plantasDisponibles().length > 0">
+          Planta
+          <select [ngModel]="filtroPlanta()" (ngModelChange)="filtroPlanta.set($event)">
+            <option value="">Todas</option>
+            <option *ngFor="let planta of plantasDisponibles()" [value]="planta">Planta {{ planta }}</option>
+          </select>
+        </label>
+
+        <label *ngIf="filasDisponibles().length > 0">
+          Fila
+          <select [ngModel]="filtroFila()" (ngModelChange)="filtroFila.set($event)">
+            <option value="">Todas</option>
+            <option *ngFor="let fila of filasDisponibles()" [value]="fila">Fila {{ fila }}</option>
+          </select>
+        </label>
+
+        <label *ngIf="butacasDisponibles().length > 0">
+          Butaca
+          <select [ngModel]="filtroButaca()" (ngModelChange)="filtroButaca.set($event)">
+            <option value="">Todas</option>
+            <option *ngFor="let butaca of butacasDisponibles()" [value]="butaca">Butaca {{ butaca }}</option>
+          </select>
+        </label>
+      </div>
+
+      <p class="muted-state" *ngIf="!entradasLoading() && entradasDisponibles().length > 0 && entradasFiltradas().length === 0">
+        No hay entradas que coincidan con esos filtros.
+      </p>
+
+      <div class="seat-grid" *ngIf="!entradasLoading() && entradasFiltradas().length > 0">
+        <article class="seat-card" *ngFor="let entrada of entradasFiltradas()">
           <span>{{ tipoUbicacion(entrada) }}</span>
           <h3>{{ entrada.descripcion }}</h3>
           <p>{{ formatEuros(entrada.precio) }}</p>
