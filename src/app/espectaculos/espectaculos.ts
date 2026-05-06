@@ -91,6 +91,7 @@ export class Espectaculos implements OnInit, OnDestroy {
     cargandoEscenarios = signal(false);
     cargandoEspectaculos = signal(false);
     cargandoEntradas = signal(false);
+    private readonly authGenericError = 'No se ha podido completar la solicitud. Revisa los datos e intentalo de nuevo.';
 
 	constructor(
         private espectaculoService: EspectaculosService,
@@ -107,6 +108,7 @@ export class Espectaculos implements OnInit, OnDestroy {
     private paymentElement: any = null;
 
     ngOnInit(){
+        this.cargarSesion();
         this.cargarExplora();
     }
 
@@ -163,12 +165,32 @@ export class Espectaculos implements OnInit, OnDestroy {
     }
 
     cerrarSesion(){
+        this.http.post(`${USER_API_BASE_URL}/users/logout`, {}, { withCredentials: true }).subscribe({
+            next: () => {},
+            error: () => {},
+        });
         this.isLoggedIn.set(false);
         this.userDisplayName.set('');
         this.accountPanelOpen.set(false);
         this.authEmail.set('');
         this.authPassword.set('');
         this.authPasswordRepeat.set('');
+    }
+
+    private cargarSesion(){
+        this.http.get<{ nombre?: string; email?: string; username?: string }>(
+            `${USER_API_BASE_URL}/users/me`,
+            { withCredentials: true },
+        ).subscribe({
+            next: (user) => {
+                this.isLoggedIn.set(true);
+                this.userDisplayName.set(user.nombre || user.username || this.formatDisplayName(user.email || ''));
+            },
+            error: () => {
+                this.isLoggedIn.set(false);
+                this.userDisplayName.set('');
+            },
+        });
     }
 
     buscarDesdeBarra(){
@@ -519,7 +541,7 @@ export class Espectaculos implements OnInit, OnDestroy {
         this.authError.set('');
 
         if (this.authMode() === 'register' && !this.canRegister()) {
-            this.authError.set('Revisa que la contrasena cumpla todos los requisitos.');
+            this.authError.set(this.authGenericError);
             return;
         }
 
@@ -528,7 +550,7 @@ export class Espectaculos implements OnInit, OnDestroy {
             ? this.http.post(`${USER_API_BASE_URL}/users/login`, {
                 name: this.authEmail().trim(),
                 pwd: this.authPassword(),
-            }, { responseType: 'text', withCredentials: true })
+            }, { withCredentials: true })
             : this.http.post(`${USER_API_BASE_URL}/users/register`, {
                 nombre: this.registerNombre().trim(),
                 apellidos: this.registerApellidos().trim(),
@@ -545,8 +567,8 @@ export class Espectaculos implements OnInit, OnDestroy {
                 this.authSubmitting.set(false);
                 this.completeLogin();
             },
-            error: (error) => {
-                this.authError.set(this.getAuthErrorMessage(error));
+            error: () => {
+                this.authError.set(this.authGenericError);
                 this.authMessage.set('');
                 this.authSubmitting.set(false);
             },
@@ -573,16 +595,12 @@ export class Espectaculos implements OnInit, OnDestroy {
         this.cerrarAuthModal();
     }
 
-    private getAuthErrorMessage(error: any){
-        if (typeof error?.error === 'string') {
-            return error.error;
-        }
-
-        return error?.error?.message || 'No se ha podido completar la operacion.';
-    }
-
     private getDisplayName(){
         const email = this.authEmail().trim();
+        return this.formatDisplayName(email);
+    }
+
+    private formatDisplayName(email: string){
         const localPart = email.split('@')[0] || 'Mi cuenta';
         return localPart
             .split(/[._\-+]/)
