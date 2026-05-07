@@ -276,7 +276,7 @@
             {{ colaEstado()?.posicion }}.
           </p>
           <p *ngIf="colaEstado()?.turnoActivo">
-            Es tu turno. Tienes {{ colaEstado()?.segundosTurnoRestantes }} segundos para seleccionar entradas antes de perderlo.
+            Es tu turno. Tienes {{ colaTurnoTiempo() }} para seleccionar entradas antes de perderlo.
           </p>
           <p *ngIf="colaEstado() && !colaEstado()?.taquillaAbierta">
             La taquilla abre el {{ formatAperturaTaquilla(colaEstado()?.aperturaTaquilla) }}.

@@ -81,6 +81,7 @@ export class Espectaculos implements OnInit, OnDestroy {
     colaLoading = signal(false);
     colaError = signal('');
     queueAccessToken = signal('');
+    colaTurnoSeconds = signal(0);
     passwordValid = computed(() => this.passwordValidation.isValid(this.passwordValidationInput()));
     sugerenciasBusqueda = computed(() => {
         const termino = this.normalizeText(this.searchTerm());
@@ -141,6 +142,7 @@ export class Espectaculos implements OnInit, OnDestroy {
 
     private reservaTimerId: ReturnType<typeof setInterval> | null = null;
     private colaTimerId: ReturnType<typeof setInterval> | null = null;
+    private colaTurnoTimerId: ReturnType<typeof setInterval> | null = null;
     private stripe: any = null;
     private elements: any = null;
     private paymentElement: any = null;
@@ -154,6 +156,7 @@ export class Espectaculos implements OnInit, OnDestroy {
     ngOnDestroy(){
         this.clearReservaTimer();
         this.clearColaTimer();
+        this.clearColaTurnoTimer();
         this.unmountPaymentElement();
     }
 
@@ -268,6 +271,7 @@ export class Espectaculos implements OnInit, OnDestroy {
         this.searchError.set('');
         this.resetCompraState();
         this.clearColaTimer();
+        this.clearColaTurnoTimer();
         this.colaEstado.set(null);
         this.colaError.set('');
         this.queueAccessToken.set('');
@@ -317,6 +321,13 @@ export class Espectaculos implements OnInit, OnDestroy {
             hour: '2-digit',
             minute: '2-digit',
         }).format(date);
+    }
+
+    colaTurnoTiempo() {
+        const minutes = Math.floor(this.colaTurnoSeconds() / 60).toString().padStart(2, '0');
+        const seconds = (this.colaTurnoSeconds() % 60).toString().padStart(2, '0');
+
+        return `${minutes}:${seconds}`;
     }
 
     private isTaquillaOpen(espectaculo: EspectaculoResultado) {
@@ -376,12 +387,14 @@ export class Espectaculos implements OnInit, OnDestroy {
         }
         if (estado.turnoActivo) {
             this.clearColaTimer();
+            this.startColaTurnoTimer(estado.segundosTurnoRestantes);
             const espectaculo = this.espectaculoActivo();
             if (espectaculo && this.entradasDisponibles().length === 0 && !this.entradasLoading()) {
                 this.cargarEntradasConTurno(espectaculo);
             }
             return;
         }
+        this.clearColaTurnoTimer();
         this.entradasDisponibles.set([]);
         this.entradasSeleccionadasCompra.set([]);
         this.queueAccessToken.set('');
@@ -405,6 +418,30 @@ export class Espectaculos implements OnInit, OnDestroy {
             clearInterval(this.colaTimerId);
             this.colaTimerId = null;
         }
+    }
+
+    private startColaTurnoTimer(initialSeconds: number) {
+        this.clearColaTurnoTimer();
+        this.colaTurnoSeconds.set(Math.max(Math.floor(initialSeconds), 0));
+        this.colaTurnoTimerId = setInterval(() => {
+            const next = this.colaTurnoSeconds() - 1;
+            this.colaTurnoSeconds.set(Math.max(next, 0));
+            if (next <= 0) {
+                this.clearColaTurnoTimer();
+                this.entradasDisponibles.set([]);
+                this.entradasSeleccionadasCompra.set([]);
+                this.queueAccessToken.set('');
+                this.entradasError.set('Tu turno de la cola virtual ha caducado. Vuelve a entrar en la cola para seleccionar entradas.');
+            }
+        }, 1000);
+    }
+
+    private clearColaTurnoTimer() {
+        if (this.colaTurnoTimerId) {
+            clearInterval(this.colaTurnoTimerId);
+            this.colaTurnoTimerId = null;
+        }
+        this.colaTurnoSeconds.set(0);
     }
 
     abrirEspectaculoExplora(espectaculo: EspectaculoResultado){
@@ -462,6 +499,7 @@ export class Espectaculos implements OnInit, OnDestroy {
     volverInicio(){
         void this.salirDeColaActual();
         this.clearColaTimer();
+        this.clearColaTurnoTimer();
         this.searchTerm.set('');
         this.searchDate.set('');
         this.searchDateText.set('');
@@ -487,6 +525,7 @@ export class Espectaculos implements OnInit, OnDestroy {
     volverAResultados(){
         void this.salirDeColaActual();
         this.clearColaTimer();
+        this.clearColaTurnoTimer();
         this.resetCompraState();
         this.espectaculoActivo.set(null);
         this.entradasDisponibles.set([]);
