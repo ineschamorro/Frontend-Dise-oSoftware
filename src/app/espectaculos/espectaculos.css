@@ -839,6 +839,7 @@ h1 {
 
 .checkout-box,
 .reserve-status,
+.queue-box,
 .payment-box,
 .result-box {
   align-items: center;
@@ -854,6 +855,7 @@ h1 {
 
 .checkout-box p,
 .reserve-status p,
+.queue-box p,
 .result-box p {
   color: #64748b;
   font-weight: 700;
@@ -863,6 +865,12 @@ h1 {
 .reserve-status {
   background: #eff6ff;
   border-color: rgba(11, 92, 255, 0.22);
+}
+
+.queue-box {
+  align-items: flex-start;
+  background: #fff7ed;
+  border-color: rgba(234, 88, 12, 0.24);
 }
 
 .payment-box {

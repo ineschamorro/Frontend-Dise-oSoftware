@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { forkJoin, map, of, switchMap } from 'rxjs';
 import { API_BASE_URL } from './api.config';
 
@@ -8,12 +8,27 @@ export interface EspectaculoResultado {
   artista: string;
   fecha: string;
   escenario: string;
+  altaDemanda?: boolean;
+  aperturaTaquilla?: string;
 }
 
 export interface EntradaDisponible {
   id: number;
   descripcion: string;
   precio: number;
+}
+
+export interface ColaEstado {
+  requiereCola: boolean;
+  taquillaAbierta: boolean;
+  enCola: boolean;
+  turnoActivo: boolean;
+  posicion: number;
+  personasDelante: number;
+  segundosTurnoRestantes: number;
+  accessToken?: string;
+  aperturaTaquilla?: string;
+  message: string;
 }
 
 @Injectable({
@@ -69,9 +84,32 @@ export class Espectaculos {
     );
   }
 
-  getEntradasDisponibles(espectaculoId: number) {
+  getEntradasDisponibles(espectaculoId: number, queueAccessToken?: string) {
+    const headers = queueAccessToken ? new HttpHeaders({ 'X-Queue-Access': queueAccessToken }) : undefined;
     return this.http.get<EntradaDisponible[]>(
       `${API_BASE_URL}/busqueda/getEntradasDisponibles?espectaculoId=${espectaculoId}`,
+      { withCredentials: true, headers },
+    );
+  }
+
+  entrarEnCola(espectaculoId: number) {
+    return this.http.post<ColaEstado>(
+      `${API_BASE_URL}/colas/join?espectaculoId=${espectaculoId}`,
+      {},
+      { withCredentials: true },
+    );
+  }
+
+  estadoCola(espectaculoId: number) {
+    return this.http.get<ColaEstado>(
+      `${API_BASE_URL}/colas/status?espectaculoId=${espectaculoId}`,
+      { withCredentials: true },
+    );
+  }
+
+  salirDeCola(espectaculoId: number) {
+    return this.http.delete<void>(
+      `${API_BASE_URL}/colas/leave?espectaculoId=${espectaculoId}`,
       { withCredentials: true },
     );
   }

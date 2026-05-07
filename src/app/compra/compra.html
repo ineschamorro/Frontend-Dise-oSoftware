@@ -8,6 +8,17 @@
 
     <p *ngIf="cargando()">Cargando entradas disponibles...</p>
 
+    <div *ngIf="colaEstado() as cola" class="reserve-box">
+      <p><strong>Cola virtual</strong></p>
+      <p *ngIf="!cola.turnoActivo && cola.taquillaAbierta">
+        Hay {{ cola.personasDelante }} persona(s) delante de ti. Posicion {{ cola.posicion }}.
+      </p>
+      <p *ngIf="cola.turnoActivo">
+        Es tu turno. Puedes seleccionar entradas durante {{ cola.segundosTurnoRestantes }} segundos.
+      </p>
+      <p *ngIf="!cola.taquillaAbierta">La taquilla abre el {{ cola.aperturaTaquilla }}.</p>
+    </div>
+
     <div *ngIf="!cargando() && entradas().length === 0" class="empty-state">
       No quedan entradas libres para este espectaculo.
     </div>

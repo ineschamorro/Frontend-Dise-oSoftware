@@ -145,7 +145,10 @@
       >
         <h3>{{ espectaculo.artista }}</h3>
         <p>{{ espectaculo.escenario }}</p>
-        <small>Ver fechas disponibles</small>
+        <small *ngIf="!espectaculo.altaDemanda">Ver fechas disponibles</small>
+        <small *ngIf="espectaculo.altaDemanda">
+          Alta demanda - cola {{ formatAperturaTaquilla(espectaculo.aperturaTaquilla) }}
+        </small>
       </button>
     </div>
   </section>
@@ -233,7 +236,10 @@
             </p>
             <h3>{{ espectaculo.escenario }}</h3>
             <p>{{ espectaculo.artista }}</p>
-            <span class="availability">Disponibilidad limitada</span>
+            <span class="availability">{{ espectaculo.altaDemanda ? 'Cola virtual' : 'Disponibilidad limitada' }}</span>
+            <small *ngIf="espectaculo.altaDemanda">
+              Alta demanda: la cola se abre el {{ formatAperturaTaquilla(espectaculo.aperturaTaquilla) }}
+            </small>
           </div>
 
           <button type="button" class="tickets-button" (click)="verEntradas(espectaculo)">
@@ -253,6 +259,46 @@
         </div>
         <button type="button" class="secondary-button" (click)="volverAResultados()">
           Volver atras
+        </button>
+      </div>
+
+      <div class="queue-box" *ngIf="espectaculoActivo()?.altaDemanda">
+        <div>
+          <span class="results-kicker">Alta demanda</span>
+          <strong>Taquilla virtual</strong>
+          <p>
+            Este espectaculo tiene cola virtual. La cola se abre el
+            {{ formatAperturaTaquilla(espectaculoActivo()?.aperturaTaquilla) }}.
+          </p>
+          <p *ngIf="colaLoading()">Entrando en la cola...</p>
+          <p *ngIf="colaEstado()?.enCola && !colaEstado()?.turnoActivo && colaEstado()?.taquillaAbierta">
+            Hay {{ colaEstado()?.personasDelante }} persona(s) delante de ti. Posicion actual:
+            {{ colaEstado()?.posicion }}.
+          </p>
+          <p *ngIf="colaEstado()?.turnoActivo">
+            Es tu turno. Tienes {{ colaEstado()?.segundosTurnoRestantes }} segundos para seleccionar entradas antes de perderlo.
+          </p>
+          <p *ngIf="colaEstado() && !colaEstado()?.taquillaAbierta">
+            La taquilla abre el {{ formatAperturaTaquilla(colaEstado()?.aperturaTaquilla) }}.
+          </p>
+          <p class="auth-error" *ngIf="colaError()">{{ colaError() }}</p>
+        </div>
+        <button
+          type="button"
+          class="tickets-button"
+          [disabled]="colaLoading() || !colaEstado()?.taquillaAbierta || colaEstado()?.enCola || colaEstado()?.turnoActivo"
+          (click)="entrarEnColaActual()"
+        >
+          {{
+            colaEstado()?.turnoActivo
+              ? 'Turno activo'
+              : colaEstado()?.enCola
+                ? 'En cola'
+                : colaEstado()?.taquillaAbierta
+                  ? 'Entrar en la cola'
+                  : 'Cola cerrada'
+          }}
+          <span aria-hidden="true"></span>
         </button>
       </div>
 

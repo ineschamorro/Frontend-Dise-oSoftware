@@ -1,11 +1,12 @@
 import { Injectable } from '@angular/core';
-import { HttpClient, HttpParams } from '@angular/common/http';
+import { HttpClient, HttpHeaders, HttpParams } from '@angular/common/http';
 import { API_BASE_URL } from '../api.config';
 import {
   EntradaCompra,
   PaymentIntentResponse,
   PaymentResult,
   ReservaResponse,
+  ColaEstado,
 } from './compra.models';
 
 @Injectable({
@@ -14,18 +15,20 @@ import {
 export class CompraService {
   constructor(private http: HttpClient) {}
 
-  getEntradasDisponibles(espectaculoId: number) {
+  getEntradasDisponibles(espectaculoId: number, queueAccessToken?: string) {
+    const headers = queueAccessToken ? new HttpHeaders({ 'X-Queue-Access': queueAccessToken }) : undefined;
     return this.http.get<EntradaCompra[]>(
       `${API_BASE_URL}/busqueda/getEntradasDisponibles?espectaculoId=${espectaculoId}`,
-      { withCredentials: true },
+      { withCredentials: true, headers },
     );
   }
 
-  reservarEntradas(entradaIds: number[]) {
+  reservarEntradas(entradaIds: number[], queueAccessToken?: string) {
+    const headers = queueAccessToken ? new HttpHeaders({ 'X-Queue-Access': queueAccessToken }) : undefined;
     return this.http.put<ReservaResponse>(
       `${API_BASE_URL}/reservas/reservar-lote`,
       { entradaIds },
-      { withCredentials: true },
+      { withCredentials: true, headers },
     );
   }
 
@@ -44,5 +47,13 @@ export class CompraService {
 
   cancelarPago() {
     return this.http.post<void>(`${API_BASE_URL}/pagos/cancelar`, {}, { withCredentials: true });
+  }
+
+  entrarEnCola(espectaculoId: number) {
+    return this.http.post<ColaEstado>(`${API_BASE_URL}/colas/join?espectaculoId=${espectaculoId}`, {}, { withCredentials: true });
+  }
+
+  estadoCola(espectaculoId: number) {
+    return this.http.get<ColaEstado>(`${API_BASE_URL}/colas/status?espectaculoId=${espectaculoId}`, { withCredentials: true });
   }
 }

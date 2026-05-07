@@ -18,6 +18,7 @@ import {
   PaymentIntentResponse,
   PaymentResult,
   ReservaResponse,
+  ColaEstado,
 } from './compra.models';
 
 @Component({
@@ -38,6 +39,7 @@ export class CompraComponent implements OnInit, AfterViewInit, OnDestroy {
   reserva = signal<ReservaResponse | null>(null);
   paymentIntent = signal<PaymentIntentResponse | null>(null);
   resultadoPago = signal<PaymentResult | null>(null);
+  colaEstado = signal<ColaEstado | null>(null);
   cargando = signal(true);
   reservando = signal(false);
   procesandoPago = signal(false);
@@ -47,6 +49,8 @@ export class CompraComponent implements OnInit, AfterViewInit, OnDestroy {
   private stripe: any = null;
   private elements: any = null;
   private paymentElement: any = null;
+  private queueAccessToken = '';
+  private colaTimerId: ReturnType<typeof setInterval> | null = null;
 
   async ngOnInit() {
     this.espectaculoId = Number(this.route.snapshot.paramMap.get('espectaculoId') ?? 0);
@@ -65,6 +69,7 @@ export class CompraComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   ngOnDestroy() {
+    this.clearColaTimer();
     this.unmountPaymentElement();
   }
 
@@ -105,7 +110,7 @@ export class CompraComponent implements OnInit, AfterViewInit, OnDestroy {
     this.reservando.set(true);
 
     try {
-      const reserva = await firstValueFrom(this.compraService.reservarEntradas(this.seleccionadas()));
+      const reserva = await firstValueFrom(this.compraService.reservarEntradas(this.seleccionadas(), this.queueAccessToken));
       this.reserva.set(reserva);
       const paymentIntent = await firstValueFrom(this.compraService.createPaymentIntent());
       this.paymentIntent.set(paymentIntent);
@@ -172,12 +177,58 @@ export class CompraComponent implements OnInit, AfterViewInit, OnDestroy {
   private async cargarEntradas() {
     this.cargando.set(true);
     try {
-      const entradas = await firstValueFrom(this.compraService.getEntradasDisponibles(this.espectaculoId));
+      const entradas = await firstValueFrom(this.compraService.getEntradasDisponibles(this.espectaculoId, this.queueAccessToken));
       this.entradas.set(entradas);
     } catch (error) {
-      this.error.set(this.toMessage(error));
+      const message = this.toMessage(error);
+      if (message.includes('cola') || message.includes('turno')) {
+        await this.entrarEnCola();
+      } else {
+        this.error.set(message);
+      }
     } finally {
       this.cargando.set(false);
+    }
+  }
+
+  private async entrarEnCola() {
+    try {
+      const estado = await firstValueFrom(this.compraService.entrarEnCola(this.espectaculoId));
+      await this.actualizarCola(estado);
+      this.startColaPolling();
+    } catch (error) {
+      this.error.set(this.toMessage(error));
+    }
+  }
+
+  private startColaPolling() {
+    this.clearColaTimer();
+    this.colaTimerId = setInterval(async () => {
+      try {
+        const estado = await firstValueFrom(this.compraService.estadoCola(this.espectaculoId));
+        this.actualizarCola(estado);
+      } catch (error) {
+        this.error.set(this.toMessage(error));
+        this.clearColaTimer();
+      }
+    }, 3000);
+  }
+
+  private async actualizarCola(estado: ColaEstado) {
+    this.colaEstado.set(estado);
+    if (estado.accessToken) {
+      this.queueAccessToken = estado.accessToken;
+    }
+    if (estado.turnoActivo) {
+      this.clearColaTimer();
+      await this.cargarEntradas();
+    }
+  }
+
+  private clearColaTimer() {
+    if (this.colaTimerId) {
+      clearInterval(this.colaTimerId);
+      this.colaTimerId = null;
     }
   }
 

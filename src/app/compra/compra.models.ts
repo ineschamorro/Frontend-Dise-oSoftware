@@ -24,3 +24,16 @@ export interface PaymentResult {
   currency: string;
   entradasConfirmadas: number;
 }
+
+export interface ColaEstado {
+  requiereCola: boolean;
+  taquillaAbierta: boolean;
+  enCola: boolean;
+  turnoActivo: boolean;
+  posicion: number;
+  personasDelante: number;
+  segundosTurnoRestantes: number;
+  accessToken?: string;
+  aperturaTaquilla?: string;
+  message: string;
+}
