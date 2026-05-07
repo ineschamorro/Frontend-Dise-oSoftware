@@ -7,6 +7,7 @@ import { firstValueFrom } from 'rxjs';
 import {
     EntradaDisponible,
     EspectaculoResultado,
+    ColaEstado,
     Espectaculos as EspectaculosService,
 } from '../espectaculos';
 import { USER_API_BASE_URL } from '../api.config';
@@ -76,6 +77,10 @@ export class Espectaculos implements OnInit, OnDestroy {
     procesandoPago = signal(false);
     compraError = signal('');
     reservaSeconds = signal(0);
+    colaEstado = signal<ColaEstado | null>(null);
+    colaLoading = signal(false);
+    colaError = signal('');
+    queueAccessToken = signal('');
     passwordValid = computed(() => this.passwordValidation.isValid(this.passwordValidationInput()));
     sugerenciasBusqueda = computed(() => {
         const termino = this.normalizeText(this.searchTerm());
@@ -135,6 +140,7 @@ export class Espectaculos implements OnInit, OnDestroy {
     ){}
 
     private reservaTimerId: ReturnType<typeof setInterval> | null = null;
+    private colaTimerId: ReturnType<typeof setInterval> | null = null;
     private stripe: any = null;
     private elements: any = null;
     private paymentElement: any = null;
@@ -147,6 +153,7 @@ export class Espectaculos implements OnInit, OnDestroy {
 
     ngOnDestroy(){
         this.clearReservaTimer();
+        this.clearColaTimer();
         this.unmountPaymentElement();
     }
 
@@ -260,12 +267,69 @@ export class Espectaculos implements OnInit, OnDestroy {
         this.searchLoading.set(false);
         this.searchError.set('');
         this.resetCompraState();
+        this.clearColaTimer();
+        this.colaEstado.set(null);
+        this.colaError.set('');
+        this.queueAccessToken.set('');
         this.espectaculoActivo.set(espectaculo);
         this.entradasDisponibles.set([]);
         this.entradasError.set('');
-        this.entradasLoading.set(true);
 
-        this.espectaculoService.getEntradasDisponibles(espectaculo.id).subscribe({
+        if (espectaculo.altaDemanda) {
+            this.entradasLoading.set(false);
+            this.colaEstado.set({
+                requiereCola: true,
+                taquillaAbierta: this.isTaquillaOpen(espectaculo),
+                enCola: false,
+                turnoActivo: false,
+                posicion: 0,
+                personasDelante: 0,
+                segundosTurnoRestantes: 0,
+                aperturaTaquilla: espectaculo.aperturaTaquilla,
+                message: 'Este espectaculo requiere cola virtual.',
+            });
+            return;
+        }
+
+        this.cargarEntradasConTurno(espectaculo);
+    }
+
+    entrarEnColaActual() {
+        const espectaculo = this.espectaculoActivo();
+        if (!espectaculo) {
+            return;
+        }
+        void this.entrarEnCola(espectaculo);
+    }
+
+    formatAperturaTaquilla(value: string | undefined) {
+        if (!value) {
+            return 'fecha no configurada';
+        }
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) {
+            return value;
+        }
+        return new Intl.DateTimeFormat('es-ES', {
+            day: '2-digit',
+            month: 'long',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+        }).format(date);
+    }
+
+    private isTaquillaOpen(espectaculo: EspectaculoResultado) {
+        if (!espectaculo.aperturaTaquilla) {
+            return true;
+        }
+        const apertura = new Date(espectaculo.aperturaTaquilla);
+        return Number.isNaN(apertura.getTime()) || apertura.getTime() <= Date.now();
+    }
+
+    private cargarEntradasConTurno(espectaculo: EspectaculoResultado) {
+        this.entradasLoading.set(true);
+        this.espectaculoService.getEntradasDisponibles(espectaculo.id, this.queueAccessToken()).subscribe({
             next: (entradas) => {
                 this.entradasDisponibles.set(entradas);
                 this.resetEntradaFilters();
@@ -276,6 +340,71 @@ export class Espectaculos implements OnInit, OnDestroy {
                 this.entradasLoading.set(false);
             },
         });
+    }
+
+    private async entrarEnCola(espectaculo: EspectaculoResultado) {
+        this.colaLoading.set(true);
+        this.entradasLoading.set(false);
+        try {
+            const estado = await firstValueFrom(this.espectaculoService.entrarEnCola(espectaculo.id));
+            this.actualizarEstadoCola(estado);
+            this.startColaPolling(espectaculo);
+        } catch (error) {
+            this.colaError.set(this.getHttpErrorMessage(error));
+        } finally {
+            this.colaLoading.set(false);
+        }
+    }
+
+    private startColaPolling(espectaculo: EspectaculoResultado) {
+        this.clearColaTimer();
+        this.colaTimerId = setInterval(async () => {
+            try {
+                const estado = await firstValueFrom(this.espectaculoService.estadoCola(espectaculo.id));
+                this.actualizarEstadoCola(estado);
+            } catch (error) {
+                this.colaError.set(this.getHttpErrorMessage(error));
+                this.clearColaTimer();
+            }
+        }, 3000);
+    }
+
+    private actualizarEstadoCola(estado: ColaEstado) {
+        this.colaEstado.set(estado);
+        if (estado.accessToken) {
+            this.queueAccessToken.set(estado.accessToken);
+        }
+        if (estado.turnoActivo) {
+            this.clearColaTimer();
+            const espectaculo = this.espectaculoActivo();
+            if (espectaculo && this.entradasDisponibles().length === 0 && !this.entradasLoading()) {
+                this.cargarEntradasConTurno(espectaculo);
+            }
+            return;
+        }
+        this.entradasDisponibles.set([]);
+        this.entradasSeleccionadasCompra.set([]);
+        this.queueAccessToken.set('');
+        this.resetCompraState();
+    }
+
+    private async salirDeColaActual() {
+        const espectaculo = this.espectaculoActivo();
+        if (!espectaculo) {
+            return;
+        }
+        try {
+            await firstValueFrom(this.espectaculoService.salirDeCola(espectaculo.id));
+        } catch {
+            // Best-effort cleanup on navigation.
+        }
+    }
+
+    private clearColaTimer() {
+        if (this.colaTimerId) {
+            clearInterval(this.colaTimerId);
+            this.colaTimerId = null;
+        }
     }
 
     abrirEspectaculoExplora(espectaculo: EspectaculoResultado){
@@ -331,6 +460,8 @@ export class Espectaculos implements OnInit, OnDestroy {
     }
 
     volverInicio(){
+        void this.salirDeColaActual();
+        this.clearColaTimer();
         this.searchTerm.set('');
         this.searchDate.set('');
         this.searchDateText.set('');
@@ -347,15 +478,23 @@ export class Espectaculos implements OnInit, OnDestroy {
         this.entradasLoading.set(false);
         this.entradasError.set('');
         this.resetCompraState();
+        this.colaEstado.set(null);
+        this.colaError.set('');
+        this.queueAccessToken.set('');
         this.cargarExplora();
     }
 
     volverAResultados(){
+        void this.salirDeColaActual();
+        this.clearColaTimer();
         this.resetCompraState();
         this.espectaculoActivo.set(null);
         this.entradasDisponibles.set([]);
         this.entradasLoading.set(false);
         this.entradasError.set('');
+        this.colaEstado.set(null);
+        this.colaError.set('');
+        this.queueAccessToken.set('');
         this.resetEntradaFilters();
     }
 
@@ -468,7 +607,7 @@ export class Espectaculos implements OnInit, OnDestroy {
 
         try {
             const reserva = await firstValueFrom(
-                this.compraService.reservarEntradas(this.entradasSeleccionadasCompra()),
+                this.compraService.reservarEntradas(this.entradasSeleccionadasCompra(), this.queueAccessToken()),
             );
             this.reservaActual.set(reserva);
             this.startReservaTimer();
@@ -543,7 +682,7 @@ export class Espectaculos implements OnInit, OnDestroy {
             return;
         }
 
-        const entradas = await firstValueFrom(this.espectaculoService.getEntradasDisponibles(espectaculo.id));
+        const entradas = await firstValueFrom(this.espectaculoService.getEntradasDisponibles(espectaculo.id, this.queueAccessToken()));
         this.entradasDisponibles.set(entradas);
     }
 
