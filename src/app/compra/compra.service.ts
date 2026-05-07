@@ -13,10 +13,12 @@ import {
   providedIn: 'root',
 })
 export class CompraService {
+  private static readonly QUEUE_CLIENT_KEY = 'esi.queue.client';
+
   constructor(private http: HttpClient) {}
 
   getEntradasDisponibles(espectaculoId: number, queueAccessToken?: string) {
-    const headers = queueAccessToken ? new HttpHeaders({ 'X-Queue-Access': queueAccessToken }) : undefined;
+    const headers = this.queueHeaders(queueAccessToken);
     return this.http.get<EntradaCompra[]>(
       `${API_BASE_URL}/busqueda/getEntradasDisponibles?espectaculoId=${espectaculoId}`,
       { withCredentials: true, headers },
@@ -24,7 +26,7 @@ export class CompraService {
   }
 
   reservarEntradas(entradaIds: number[], queueAccessToken?: string) {
-    const headers = queueAccessToken ? new HttpHeaders({ 'X-Queue-Access': queueAccessToken }) : undefined;
+    const headers = this.queueHeaders(queueAccessToken);
     return this.http.put<ReservaResponse>(
       `${API_BASE_URL}/reservas/reservar-lote`,
       { entradaIds },
@@ -50,10 +52,40 @@ export class CompraService {
   }
 
   entrarEnCola(espectaculoId: number) {
-    return this.http.post<ColaEstado>(`${API_BASE_URL}/colas/join?espectaculoId=${espectaculoId}`, {}, { withCredentials: true });
+    return this.http.post<ColaEstado>(
+      `${API_BASE_URL}/colas/join?espectaculoId=${espectaculoId}`,
+      {},
+      { withCredentials: true, headers: this.queueHeaders() },
+    );
   }
 
   estadoCola(espectaculoId: number) {
-    return this.http.get<ColaEstado>(`${API_BASE_URL}/colas/status?espectaculoId=${espectaculoId}`, { withCredentials: true });
+    return this.http.get<ColaEstado>(
+      `${API_BASE_URL}/colas/status?espectaculoId=${espectaculoId}`,
+      { withCredentials: true, headers: this.queueHeaders() },
+    );
+  }
+
+  private queueHeaders(queueAccessToken?: string) {
+    let headers = new HttpHeaders({ 'X-Queue-Client': this.queueClientId() });
+    if (queueAccessToken) {
+      headers = headers.set('X-Queue-Access', queueAccessToken);
+    }
+    return headers;
+  }
+
+  private queueClientId() {
+    if (typeof window === 'undefined') {
+      return 'server';
+    }
+
+    const existing = window.sessionStorage.getItem(CompraService.QUEUE_CLIENT_KEY);
+    if (existing) {
+      return existing;
+    }
+
+    const generated = window.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    window.sessionStorage.setItem(CompraService.QUEUE_CLIENT_KEY, generated);
+    return generated;
   }
 }

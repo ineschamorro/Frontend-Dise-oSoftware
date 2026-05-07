@@ -35,6 +35,7 @@ export interface ColaEstado {
   providedIn: 'root',
 })
 export class Espectaculos {
+  private static readonly QUEUE_CLIENT_KEY = 'esi.queue.client';
 
   constructor(private http: HttpClient) {}
 
@@ -85,7 +86,7 @@ export class Espectaculos {
   }
 
   getEntradasDisponibles(espectaculoId: number, queueAccessToken?: string) {
-    const headers = queueAccessToken ? new HttpHeaders({ 'X-Queue-Access': queueAccessToken }) : undefined;
+    const headers = this.queueHeaders(queueAccessToken);
     return this.http.get<EntradaDisponible[]>(
       `${API_BASE_URL}/busqueda/getEntradasDisponibles?espectaculoId=${espectaculoId}`,
       { withCredentials: true, headers },
@@ -96,21 +97,21 @@ export class Espectaculos {
     return this.http.post<ColaEstado>(
       `${API_BASE_URL}/colas/join?espectaculoId=${espectaculoId}`,
       {},
-      { withCredentials: true },
+      { withCredentials: true, headers: this.queueHeaders() },
     );
   }
 
   estadoCola(espectaculoId: number) {
     return this.http.get<ColaEstado>(
       `${API_BASE_URL}/colas/status?espectaculoId=${espectaculoId}`,
-      { withCredentials: true },
+      { withCredentials: true, headers: this.queueHeaders() },
     );
   }
 
   salirDeCola(espectaculoId: number) {
     return this.http.delete<void>(
       `${API_BASE_URL}/colas/leave?espectaculoId=${espectaculoId}`,
-      { withCredentials: true },
+      { withCredentials: true, headers: this.queueHeaders() },
     );
   }
 
@@ -157,6 +158,29 @@ export class Espectaculos {
       vistos.add(espectaculo.id);
       return true;
     });
+  }
+
+  private queueHeaders(queueAccessToken?: string) {
+    let headers = new HttpHeaders({ 'X-Queue-Client': this.queueClientId() });
+    if (queueAccessToken) {
+      headers = headers.set('X-Queue-Access', queueAccessToken);
+    }
+    return headers;
+  }
+
+  private queueClientId() {
+    if (typeof window === 'undefined') {
+      return 'server';
+    }
+
+    const existing = window.sessionStorage.getItem(Espectaculos.QUEUE_CLIENT_KEY);
+    if (existing) {
+      return existing;
+    }
+
+    const generated = window.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    window.sessionStorage.setItem(Espectaculos.QUEUE_CLIENT_KEY, generated);
+    return generated;
   }
   
 }
