@@ -450,7 +450,7 @@
       x
     </button>
 
-    <div class="auth-tabs" aria-label="Tipo de acceso">
+    <div class="auth-tabs" aria-label="Tipo de acceso" *ngIf="authMode() !== 'twoFactor' && authMode() !== 'registerTwoFactor'">
       <button type="button" [class.active]="authMode() === 'login'" (click)="authMode.set('login')">
         Iniciar sesion
       </button>
@@ -463,10 +463,24 @@
       </button>
     </div>
 
-    <h2 id="auth-title">{{ authMode() === 'login' ? 'Bienvenida de nuevo' : 'Crea tu cuenta' }}</h2>
+    <h2 id="auth-title">
+      {{
+        authMode() === 'twoFactor'
+          ? 'Verificacion 2FA'
+          : authMode() === 'registerTwoFactor'
+            ? 'Activa el doble factor'
+          : authMode() === 'login'
+            ? 'Bienvenida de nuevo'
+            : 'Crea tu cuenta'
+      }}
+    </h2>
     <p>
       {{
-        authMode() === 'login'
+        authMode() === 'twoFactor'
+          ? 'Introduce el codigo de 6 digitos de tu app autenticadora.'
+          : authMode() === 'registerTwoFactor'
+          ? 'Escanea el QR y confirma el codigo para proteger tu cuenta desde el primer inicio.'
+          : authMode() === 'login'
           ? 'Accede para continuar con tus reservas y compras.'
           : 'Usa un correo valido y una contrasena robusta para comprar entradas.'
       }}
@@ -523,7 +537,7 @@
         </label>
       </div>
 
-      <label>
+      <label *ngIf="authMode() !== 'twoFactor' && authMode() !== 'registerTwoFactor'">
         Correo electronico
         <input
           type="email"
@@ -534,7 +548,7 @@
         />
       </label>
 
-      <label>
+      <label *ngIf="authMode() !== 'twoFactor' && authMode() !== 'registerTwoFactor'">
         Contrasena
         <span class="password-input">
           <input
@@ -555,6 +569,20 @@
             <span class="eye-icon" aria-hidden="true"></span>
           </button>
         </span>
+      </label>
+
+      <label *ngIf="authMode() === 'twoFactor'">
+        Codigo 2FA
+        <input
+          type="text"
+          inputmode="numeric"
+          maxlength="6"
+          name="twoFactorCode"
+          placeholder="000000"
+          autocomplete="one-time-code"
+          [ngModel]="twoFactorCode()"
+          (ngModelChange)="twoFactorCode.set($event)"
+        />
       </label>
 
       <label *ngIf="authMode() === 'register'">
@@ -591,6 +619,37 @@
         [fechaNacimiento]="registerFechaNacimiento()"
       />
 
+      <label class="auth-checkbox" *ngIf="authMode() === 'register'">
+        <input
+          type="checkbox"
+          name="registerEnableTwoFactor"
+          [ngModel]="registerEnableTwoFactor()"
+          (ngModelChange)="registerEnableTwoFactor.set($event)"
+        />
+        <span>Activar doble factor al crear la cuenta</span>
+      </label>
+
+      <div class="auth-two-factor-setup" *ngIf="authMode() === 'registerTwoFactor'">
+        <div class="auth-qr-loading" *ngIf="twoFactorSetupLoading()">Preparando QR...</div>
+        <ng-container *ngIf="twoFactorSetupOpen()">
+          <img [src]="twoFactorQrUrl()" alt="Codigo QR para configurar 2FA" />
+          <p>Escanea el QR con tu app autenticadora.</p>
+          <label>
+            Codigo de la app
+            <input
+              type="text"
+              inputmode="numeric"
+              maxlength="6"
+              name="registerTwoFactorCode"
+              placeholder="000000"
+              autocomplete="one-time-code"
+              [ngModel]="twoFactorSetupCode()"
+              (ngModelChange)="twoFactorSetupCode.set($event)"
+            />
+          </label>
+        </ng-container>
+      </div>
+
       <p class="auth-error" *ngIf="authError()">{{ authError() }}</p>
       <p class="auth-success" *ngIf="authMessage()">{{ authMessage() }}</p>
 
@@ -602,7 +661,11 @@
         {{
           authSubmitting()
             ? 'Enviando...'
-            : authMode() === 'login'
+            : authMode() === 'twoFactor'
+              ? 'Verificar codigo'
+              : authMode() === 'registerTwoFactor'
+              ? 'Activar y entrar'
+              : authMode() === 'login'
               ? 'Entrar'
               : 'Crear cuenta segura'
         }}
@@ -636,32 +699,163 @@
         <span class="account-chevron" [class.open]="entradasOpen()"></span>
       </button>
       <div class="account-submenu" *ngIf="entradasOpen()">
-        <button type="button">Proximos eventos</button>
-        <button type="button">Eventos pasados</button>
+        <div class="account-ticket-tabs">
+          <button
+            type="button"
+            [class.active]="accountTicketsMode() === 'upcoming'"
+            (click)="openAccountTickets('upcoming')"
+          >
+            Proximos eventos
+          </button>
+          <button
+            type="button"
+            [class.active]="accountTicketsMode() === 'past'"
+            (click)="openAccountTickets('past')"
+          >
+            Eventos pasados
+          </button>
+        </div>
+
+        <div class="account-ticket-list" *ngIf="accountTicketsFiltered().length > 0">
+          <article class="account-ticket-card" *ngFor="let ticket of accountTicketsFiltered()">
+            <div class="account-ticket-date">
+              <span>{{ formatFecha(ticket.fecha).mes }}</span>
+              <strong>{{ formatFecha(ticket.fecha).dia }}</strong>
+            </div>
+            <div>
+              <strong>{{ ticket.artista }}</strong>
+              <p>{{ ticket.escenario }} · {{ formatFecha(ticket.fecha).hora }}</p>
+              <small>{{ ticket.descripcion }}</small>
+              <em>Entrada #{{ ticket.entradaId }} · {{ formatEuros(ticket.precio) }}</em>
+            </div>
+          </article>
+        </div>
+
+        <p class="account-empty" *ngIf="accountTicketsFiltered().length === 0">
+          {{
+            accountTicketsMode() === 'upcoming'
+              ? 'No tienes entradas para proximos eventos.'
+              : 'No tienes entradas de eventos pasados.'
+          }}
+        </p>
       </div>
     </section>
 
     <section class="account-section">
-      <button type="button" class="account-row" (click)="perfilOpen.set(!perfilOpen())">
+      <button type="button" class="account-row" (click)="perfilOpen() ? perfilOpen.set(false) : openProfile()">
         <span class="account-icon profile-mini" aria-hidden="true"></span>
         <strong>Mi Perfil</strong>
         <span class="account-chevron" [class.open]="perfilOpen()"></span>
       </button>
-      <div class="account-submenu compact" *ngIf="perfilOpen()">
-        <button type="button">Datos personales</button>
-        <button type="button">Correo de acceso</button>
-      </div>
-    </section>
+      <div class="account-submenu compact profile-panel" *ngIf="perfilOpen()">
+        <div class="profile-summary" *ngIf="!profileEditing()">
+          <dl>
+            <div>
+              <dt>Nombre</dt>
+              <dd>{{ profileNombre() }} {{ profileApellidos() }}</dd>
+            </div>
+            <div>
+              <dt>Correo</dt>
+              <dd>{{ profileEmail() }}</dd>
+            </div>
+            <div>
+              <dt>Alias</dt>
+              <dd>{{ profileUsername() || 'Sin alias' }}</dd>
+            </div>
+            <div>
+              <dt>Fecha nacimiento</dt>
+              <dd>{{ profileFechaNacimiento() || 'Sin indicar' }}</dd>
+            </div>
+            <div>
+              <dt>Rol</dt>
+              <dd>{{ profileRol() || 'USER' }}</dd>
+            </div>
+          </dl>
 
-    <section class="account-section">
-      <button type="button" class="account-row" (click)="configOpen.set(!configOpen())">
-        <span class="account-icon settings-mini" aria-hidden="true"></span>
-        <strong>Mi Configuracion</strong>
-        <span class="account-chevron" [class.open]="configOpen()"></span>
-      </button>
-      <div class="account-submenu compact" *ngIf="configOpen()">
-        <button type="button">Preferencias</button>
-        <button type="button">Seguridad</button>
+          <div class="two-factor-card">
+            <div>
+              <span>Seguridad</span>
+              <strong>{{ profileTwoFactorEnabled() ? '2FA activado' : '2FA desactivado' }}</strong>
+            </div>
+            <button
+              type="button"
+              *ngIf="!profileTwoFactorEnabled()"
+              [disabled]="twoFactorSetupLoading()"
+              (click)="startTwoFactorSetup()"
+            >
+              {{ twoFactorSetupLoading() ? 'Preparando...' : 'Activar 2FA' }}
+            </button>
+            <button
+              type="button"
+              class="two-factor-secondary"
+              *ngIf="profileTwoFactorEnabled()"
+              [disabled]="twoFactorSetupLoading()"
+              (click)="disableTwoFactor()"
+            >
+              Desactivar
+            </button>
+          </div>
+
+          <div class="two-factor-setup" *ngIf="twoFactorSetupOpen()">
+            <img [src]="twoFactorQrUrl()" alt="Codigo QR para configurar 2FA" />
+            <p>Escanea el QR o introduce esta clave manualmente:</p>
+            <code>{{ twoFactorSecretKey() }}</code>
+            <label>
+              Codigo de la app
+              <input
+                type="text"
+                inputmode="numeric"
+                maxlength="6"
+                name="twoFactorSetupCode"
+                placeholder="000000"
+                [ngModel]="twoFactorSetupCode()"
+                (ngModelChange)="twoFactorSetupCode.set($event)"
+              />
+            </label>
+            <button type="button" [disabled]="twoFactorSetupLoading()" (click)="confirmTwoFactorSetup()">
+              {{ twoFactorSetupLoading() ? 'Verificando...' : 'Confirmar 2FA' }}
+            </button>
+          </div>
+
+          <p class="auth-success" *ngIf="twoFactorMessage()">{{ twoFactorMessage() }}</p>
+          <p class="auth-error" *ngIf="twoFactorError()">{{ twoFactorError() }}</p>
+
+          <button type="button" class="profile-edit-button" (click)="startProfileEdit()">Editar perfil</button>
+        </div>
+
+        <form class="profile-form" *ngIf="profileEditing()" (ngSubmit)="saveProfile()">
+          <label>
+            Nombre
+            <input type="text" maxlength="80" [ngModel]="profileNombre()" name="profileNombre" (ngModelChange)="profileNombre.set($event)" />
+          </label>
+          <label>
+            Apellidos
+            <input type="text" maxlength="120" [ngModel]="profileApellidos()" name="profileApellidos" (ngModelChange)="profileApellidos.set($event)" />
+          </label>
+          <label>
+            Correo electronico
+            <input type="email" maxlength="180" [ngModel]="profileEmail()" name="profileEmail" (ngModelChange)="profileEmail.set($event)" />
+          </label>
+          <label>
+            Alias
+            <input type="text" maxlength="60" [ngModel]="profileUsername()" name="profileUsername" (ngModelChange)="profileUsername.set($event)" />
+          </label>
+          <label>
+            Fecha de nacimiento
+            <input type="date" [ngModel]="profileFechaNacimiento()" name="profileFechaNacimiento" (ngModelChange)="profileFechaNacimiento.set($event)" />
+          </label>
+          <div class="profile-actions">
+            <button type="submit" class="profile-save-button" [disabled]="profileSaving()">
+              {{ profileSaving() ? 'Guardando...' : 'Guardar' }}
+            </button>
+            <button type="button" class="profile-cancel-button" [disabled]="profileSaving()" (click)="cancelProfileEdit()">
+              Cancelar
+            </button>
+          </div>
+        </form>
+
+        <p class="auth-success" *ngIf="profileMessage()">{{ profileMessage() }}</p>
+        <p class="auth-error" *ngIf="profileError()">{{ profileError() }}</p>
       </div>
     </section>
 

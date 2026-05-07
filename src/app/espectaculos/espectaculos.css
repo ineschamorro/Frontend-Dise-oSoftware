@@ -1025,6 +1025,70 @@ h1 {
   width: 100%;
 }
 
+.auth-checkbox {
+  align-items: center;
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.8rem;
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: auto minmax(0, 1fr);
+  padding: 0.85rem;
+}
+
+.auth-checkbox input {
+  accent-color: #0b5cff;
+  height: 1.1rem;
+  padding: 0;
+  width: 1.1rem;
+}
+
+.auth-checkbox span {
+  color: #111827;
+  font-size: 0.9rem;
+  font-weight: 900;
+}
+
+.auth-two-factor-setup {
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.85rem;
+  display: grid;
+  gap: 0.75rem;
+  padding: 0.9rem;
+}
+
+.auth-two-factor-setup img {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.65rem;
+  justify-self: center;
+  max-width: 220px;
+  padding: 0.5rem;
+  width: 100%;
+}
+
+.auth-two-factor-setup p,
+.auth-qr-loading {
+  color: #64748b;
+  font-size: 0.86rem;
+  font-weight: 800;
+  line-height: 1.4;
+  margin: 0;
+}
+
+.auth-two-factor-setup code {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.55rem;
+  color: #0b5cff;
+  display: block;
+  font-size: 0.86rem;
+  font-weight: 900;
+  overflow-wrap: anywhere;
+  padding: 0.65rem;
+}
+
 .password-input {
   align-items: center;
   display: flex;
@@ -1268,35 +1332,6 @@ h1 {
   box-shadow: 0 0.35rem 0 currentColor, -0.55rem 0.7rem 0 currentColor, 0 0.7rem 0 currentColor;
 }
 
-.settings-mini {
-  border: 2px solid currentColor;
-  border-radius: 50%;
-}
-
-.settings-mini::before {
-  background: currentColor;
-  border-radius: 50%;
-  content: "";
-  height: 0.35rem;
-  left: 50%;
-  position: absolute;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  width: 0.35rem;
-}
-
-.settings-mini::after {
-  background: currentColor;
-  content: "";
-  height: 0.18rem;
-  left: 50%;
-  position: absolute;
-  top: -0.34rem;
-  transform: translateX(-50%);
-  width: 0.22rem;
-  box-shadow: 0 1.85rem 0 currentColor, 0.92rem 0.92rem 0 currentColor, -0.92rem 0.92rem 0 currentColor;
-}
-
 .logout-mini {
   border: 2px solid currentColor;
   border-right: 0;
@@ -1354,6 +1389,314 @@ h1 {
   color: #374151;
   font-size: 0.98rem;
   text-align: left;
+}
+
+.account-ticket-tabs {
+  background: #f3f4f6;
+  border-radius: 999px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: 0.25rem;
+}
+
+.account-ticket-tabs button {
+  border-radius: 999px;
+  color: #6b7280;
+  font-size: 0.84rem;
+  font-weight: 900;
+  min-height: 2.25rem;
+  padding: 0 0.7rem;
+  text-align: center;
+}
+
+.account-ticket-tabs button.active {
+  background: #111827;
+  color: #ffffff;
+}
+
+.account-ticket-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.account-ticket-card {
+  align-items: start;
+  background: #ffffff;
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  border-radius: 0.75rem;
+  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.08);
+  display: grid;
+  gap: 0.85rem;
+  grid-template-columns: 3.5rem minmax(0, 1fr);
+  padding: 0.85rem;
+}
+
+.account-ticket-date {
+  align-items: center;
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.45rem;
+  display: grid;
+  height: 3.6rem;
+  justify-items: center;
+}
+
+.account-ticket-date span {
+  color: #e11d8f;
+  font-size: 0.72rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.account-ticket-date strong {
+  color: #111827;
+  font-size: 1.32rem;
+  line-height: 1;
+}
+
+.account-ticket-card strong {
+  color: #111827;
+  display: block;
+  font-size: 0.98rem;
+  line-height: 1.25;
+}
+
+.account-ticket-card p,
+.account-ticket-card small,
+.account-ticket-card em {
+  display: block;
+  line-height: 1.35;
+  margin: 0.18rem 0 0;
+}
+
+.account-ticket-card p {
+  color: #64748b;
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.account-ticket-card small {
+  color: #374151;
+  font-size: 0.84rem;
+  font-weight: 800;
+}
+
+.account-ticket-card em {
+  color: #0b5cff;
+  font-size: 0.82rem;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.account-empty {
+  background: #f8fafc;
+  border: 1px dashed #cbd5e1;
+  border-radius: 0.75rem;
+  color: #64748b;
+  font-size: 0.9rem;
+  font-weight: 800;
+  line-height: 1.4;
+  margin: 0;
+  padding: 0.9rem;
+}
+
+.profile-panel {
+  padding-left: 0;
+}
+
+.profile-summary dl {
+  display: grid;
+  gap: 0.65rem;
+  margin: 0;
+}
+
+.profile-summary dl div {
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.7rem;
+  padding: 0.75rem;
+}
+
+.profile-summary dt {
+  color: #64748b;
+  font-size: 0.72rem;
+  font-weight: 900;
+  margin-bottom: 0.25rem;
+  text-transform: uppercase;
+}
+
+.profile-summary dd {
+  color: #111827;
+  font-size: 0.95rem;
+  font-weight: 800;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.profile-edit-button,
+.profile-save-button {
+  background: linear-gradient(135deg, #e11d8f, #0b5cff);
+  border-radius: 999px;
+  color: #ffffff;
+  font-weight: 900;
+  min-height: 2.65rem;
+  padding: 0 1rem;
+  width: 100%;
+}
+
+.profile-edit-button {
+  margin-top: 0.9rem;
+}
+
+.two-factor-card {
+  align-items: center;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 0.75rem;
+  display: grid;
+  gap: 0.8rem;
+  grid-template-columns: minmax(0, 1fr) auto;
+  margin-top: 0.9rem;
+  padding: 0.85rem;
+}
+
+.two-factor-card span {
+  color: #9a3412;
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.two-factor-card strong {
+  color: #111827;
+  display: block;
+  font-size: 0.98rem;
+  line-height: 1.25;
+  margin-top: 0.15rem;
+}
+
+.two-factor-card button,
+.two-factor-setup button {
+  background: #111827;
+  border-radius: 999px;
+  color: #ffffff;
+  font-size: 0.84rem;
+  font-weight: 900;
+  min-height: 2.35rem;
+  padding: 0 0.9rem;
+  text-align: center;
+}
+
+.two-factor-card .two-factor-secondary {
+  background: #ffffff;
+  border: 1px solid #f97316;
+  color: #c2410c;
+}
+
+.two-factor-setup {
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.75rem;
+  display: grid;
+  gap: 0.75rem;
+  justify-items: stretch;
+  margin-top: 0.75rem;
+  padding: 0.85rem;
+}
+
+.two-factor-setup img {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.6rem;
+  justify-self: center;
+  max-width: 220px;
+  padding: 0.5rem;
+  width: 100%;
+}
+
+.two-factor-setup p {
+  color: #64748b;
+  font-size: 0.84rem;
+  font-weight: 800;
+  line-height: 1.4;
+  margin: 0;
+}
+
+.two-factor-setup code {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.5rem;
+  color: #0b5cff;
+  display: block;
+  font-size: 0.86rem;
+  font-weight: 900;
+  overflow-wrap: anywhere;
+  padding: 0.65rem;
+}
+
+.two-factor-setup label {
+  color: #374151;
+  display: grid;
+  font-size: 0.82rem;
+  font-weight: 900;
+  gap: 0.35rem;
+}
+
+.two-factor-setup input {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.7rem;
+  color: #111827;
+  font: inherit;
+  font-weight: 800;
+  letter-spacing: 0;
+  outline: none;
+  padding: 0.78rem 0.85rem;
+  width: 100%;
+}
+
+.profile-form {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.profile-form label {
+  color: #374151;
+  display: grid;
+  font-size: 0.82rem;
+  font-weight: 900;
+  gap: 0.35rem;
+}
+
+.profile-form input,
+.profile-form textarea {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.7rem;
+  color: #111827;
+  font: inherit;
+  font-size: 0.93rem;
+  font-weight: 700;
+  outline: none;
+  padding: 0.78rem 0.85rem;
+  resize: vertical;
+  width: 100%;
+}
+
+.profile-actions {
+  display: grid;
+  gap: 0.65rem;
+  grid-template-columns: 1fr 1fr;
+}
+
+.profile-cancel-button {
+  background: #f8fafc;
+  border: 1px solid rgba(225, 29, 143, 0.18);
+  border-radius: 999px;
+  color: #e11d8f;
+  font-weight: 900;
+  min-height: 2.65rem;
 }
 
 @media (max-width: 860px) {
