@@ -16,6 +16,39 @@ import { PasswordValidationService } from '../password-validation.service';
 import { CompraService } from '../compra/compra.service';
 import { PaymentIntentResponse, PaymentResult, ReservaResponse } from '../compra/compra.models';
 
+interface AccountTicket {
+    id: string;
+    entradaId: number;
+    artista: string;
+    escenario: string;
+    fecha: string;
+    descripcion: string;
+    precio: number;
+    purchasedAt: string;
+}
+
+interface UserProfile {
+    id?: number;
+    nombre?: string;
+    apellidos?: string;
+    email?: string;
+    username?: string;
+    fechaNacimiento?: string;
+    twoFactorEnabled?: boolean;
+    rol?: string;
+}
+
+interface LoginResponse {
+    twoFactorRequired?: boolean;
+    twoFactorChallengeToken?: string;
+    user?: UserProfile;
+}
+
+interface TwoFactorSetupResponse {
+    qrUrl: string;
+    secretKey: string;
+}
+
 @Component({
   selector: 'app-espectaculos',
   imports: [CommonModule, FormsModule, PasswordRulesComponent],
@@ -25,16 +58,18 @@ import { PaymentIntentResponse, PaymentResult, ReservaResponse } from '../compra
 export class Espectaculos implements OnInit, OnDestroy {
     @ViewChild('paymentElementHost') paymentElementHost?: ElementRef<HTMLDivElement>;
     private static readonly AUTH_STORAGE_KEY = 'esi.auth.session';
+    private static readonly TICKETS_STORAGE_PREFIX = 'esi.account.tickets:';
 
     authModalOpen = signal(false);
     accountPanelOpen = signal(false);
     isLoggedIn = signal(false);
     userDisplayName = signal('');
-    authMode = signal<'login' | 'register'>('login');
+    authMode = signal<'login' | 'register' | 'twoFactor' | 'registerTwoFactor'>('login');
     registerNombre = signal('');
     registerApellidos = signal('');
     registerUsername = signal('');
     registerFechaNacimiento = signal('');
+    registerEnableTwoFactor = signal(false);
     authEmail = signal('');
     authPassword = signal('');
     authPasswordRepeat = signal('');
@@ -43,9 +78,31 @@ export class Espectaculos implements OnInit, OnDestroy {
     authMessage = signal('');
     authError = signal('');
     authSubmitting = signal(false);
+    twoFactorCode = signal('');
+    twoFactorChallengeToken = signal('');
     entradasOpen = signal(true);
+    accountTicketsMode = signal<'upcoming' | 'past'>('upcoming');
+    accountTickets = signal<AccountTicket[]>([]);
     perfilOpen = signal(false);
-    configOpen = signal(false);
+    profileEditing = signal(false);
+    profileSaving = signal(false);
+    profileMessage = signal('');
+    profileError = signal('');
+    profileNombre = signal('');
+    profileApellidos = signal('');
+    profileEmail = signal('');
+    profileUsername = signal('');
+    profileFechaNacimiento = signal('');
+    profileRol = signal('');
+    profileTwoFactorEnabled = signal(false);
+    twoFactorSetupOpen = signal(false);
+    twoFactorSetupLoading = signal(false);
+    twoFactorQrUrl = signal('');
+    twoFactorSecretKey = signal('');
+    twoFactorSetupCode = signal('');
+    twoFactorMessage = signal('');
+    twoFactorError = signal('');
+    pendingRegisterProfile = signal<UserProfile | null>(null);
     searchTerm = signal('');
     searchDate = signal('');
     searchDateText = signal('');
@@ -83,6 +140,16 @@ export class Espectaculos implements OnInit, OnDestroy {
     queueAccessToken = signal('');
     colaTurnoSeconds = signal(0);
     passwordValid = computed(() => this.passwordValidation.isValid(this.passwordValidationInput()));
+    accountTicketsFiltered = computed(() => {
+        const now = Date.now();
+        return this.accountTickets()
+            .filter((ticket) => {
+                const eventTime = new Date(ticket.fecha).getTime();
+                const isPast = !Number.isNaN(eventTime) && eventTime < now;
+                return this.accountTicketsMode() === 'past' ? isPast : !isPast;
+            })
+            .sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime());
+    });
     sugerenciasBusqueda = computed(() => {
         const termino = this.normalizeText(this.searchTerm());
         if (termino.length < 1) {
@@ -149,6 +216,7 @@ export class Espectaculos implements OnInit, OnDestroy {
 
     ngOnInit(){
         this.restoreAuthSession();
+        this.loadAccountTickets();
         this.cargarSesion();
         this.cargarExplora();
     }
@@ -183,10 +251,19 @@ export class Espectaculos implements OnInit, OnDestroy {
         this.accountPanelOpen.set(false);
         this.authMessage.set('');
         this.authError.set('');
+        this.twoFactorCode.set('');
+        this.twoFactorChallengeToken.set('');
+        this.resetAuthTwoFactorSetup();
     }
 
     cerrarAuthModal(){
         this.authModalOpen.set(false);
+        if (this.authMode() === 'twoFactor' || this.authMode() === 'registerTwoFactor') {
+            this.authMode.set('login');
+        }
+        this.twoFactorCode.set('');
+        this.twoFactorChallengeToken.set('');
+        this.pendingRegisterProfile.set(null);
     }
 
     irARecuperarPassword(){
@@ -200,6 +277,8 @@ export class Espectaculos implements OnInit, OnDestroy {
             return;
         }
 
+        this.loadAccountTickets();
+        this.cargarSesion();
         this.accountPanelOpen.set(true);
     }
 
@@ -219,20 +298,157 @@ export class Espectaculos implements OnInit, OnDestroy {
         this.authPassword.set('');
         this.authPasswordRepeat.set('');
         this.clearStoredAuthSession();
+        this.accountTickets.set([]);
+        this.clearProfileForm();
     }
 
     private cargarSesion(){
-        this.http.get<{ nombre?: string; email?: string; username?: string }>(
+        this.http.get<UserProfile>(
             `${USER_API_BASE_URL}/users/me`,
             { withCredentials: true },
         ).subscribe({
             next: (user) => {
                 this.isLoggedIn.set(true);
                 this.userDisplayName.set(user.nombre || user.username || this.formatDisplayName(user.email || ''));
+                this.authEmail.set(user.email || this.authEmail());
+                this.setProfileForm(user);
+                this.loadAccountTickets();
             },
             error: () => {
                 this.isLoggedIn.set(false);
                 this.userDisplayName.set('');
+            },
+        });
+    }
+
+    openProfile() {
+        this.perfilOpen.set(true);
+        this.profileMessage.set('');
+        this.profileError.set('');
+        this.twoFactorMessage.set('');
+        this.twoFactorError.set('');
+        this.cargarSesion();
+    }
+
+    startProfileEdit() {
+        this.profileEditing.set(true);
+        this.profileMessage.set('');
+        this.profileError.set('');
+    }
+
+    cancelProfileEdit() {
+        this.profileEditing.set(false);
+        this.profileMessage.set('');
+        this.profileError.set('');
+        this.cargarSesion();
+    }
+
+    saveProfile() {
+        this.profileSaving.set(true);
+        this.profileMessage.set('');
+        this.profileError.set('');
+
+        this.http.put<UserProfile>(`${USER_API_BASE_URL}/users/me`, {
+            nombre: this.profileNombre().trim(),
+            apellidos: this.profileApellidos().trim(),
+            email: this.profileEmail().trim(),
+            username: this.profileUsername().trim() || null,
+            fechaNacimiento: this.profileFechaNacimiento() || null,
+        }, { withCredentials: true }).subscribe({
+            next: (profile) => {
+                this.setProfileForm(profile);
+                this.authEmail.set(profile.email || '');
+                this.userDisplayName.set(profile.nombre || profile.username || this.formatDisplayName(profile.email || ''));
+                this.profileEditing.set(false);
+                this.profileSaving.set(false);
+                this.profileMessage.set('Perfil actualizado correctamente.');
+                this.loadAccountTickets();
+            },
+            error: () => {
+                this.profileSaving.set(false);
+                this.profileError.set('No se ha podido actualizar el perfil. Revisa los datos.');
+            },
+        });
+    }
+
+    startTwoFactorSetup() {
+        this.twoFactorSetupLoading.set(true);
+        this.twoFactorSetupOpen.set(false);
+        this.twoFactorQrUrl.set('');
+        this.twoFactorSecretKey.set('');
+        this.twoFactorSetupCode.set('');
+        this.twoFactorMessage.set('');
+        this.twoFactorError.set('');
+
+        this.http.post<TwoFactorSetupResponse>(
+            `${USER_API_BASE_URL}/users/2fa/setup`,
+            {},
+            { withCredentials: true },
+        ).subscribe({
+            next: (setup) => {
+                this.twoFactorQrUrl.set(setup.qrUrl);
+                this.twoFactorSecretKey.set(setup.secretKey);
+                this.twoFactorSetupOpen.set(true);
+                this.twoFactorSetupLoading.set(false);
+            },
+            error: () => {
+                this.twoFactorSetupLoading.set(false);
+                this.twoFactorError.set('No se ha podido iniciar la configuracion 2FA.');
+            },
+        });
+    }
+
+    confirmTwoFactorSetup() {
+        const code = this.twoFactorSetupCode().trim();
+        if (!/^\d{6}$/.test(code)) {
+            this.twoFactorError.set('Introduce un codigo de 6 digitos.');
+            return;
+        }
+
+        this.twoFactorSetupLoading.set(true);
+        this.twoFactorMessage.set('');
+        this.twoFactorError.set('');
+
+        this.http.post<UserProfile>(
+            `${USER_API_BASE_URL}/users/2fa/verify`,
+            { code },
+            { withCredentials: true },
+        ).subscribe({
+            next: (profile) => {
+                this.setProfileForm(profile);
+                this.twoFactorSetupLoading.set(false);
+                this.twoFactorSetupOpen.set(false);
+                this.twoFactorQrUrl.set('');
+                this.twoFactorSecretKey.set('');
+                this.twoFactorSetupCode.set('');
+                this.twoFactorMessage.set('Doble factor activado correctamente.');
+            },
+            error: () => {
+                this.twoFactorSetupLoading.set(false);
+                this.twoFactorError.set('Codigo 2FA invalido. Revisa la app autenticadora.');
+            },
+        });
+    }
+
+    disableTwoFactor() {
+        this.twoFactorSetupLoading.set(true);
+        this.twoFactorMessage.set('');
+        this.twoFactorError.set('');
+
+        this.http.post<UserProfile>(
+            `${USER_API_BASE_URL}/users/2fa/disable`,
+            {},
+            { withCredentials: true },
+        ).subscribe({
+            next: (profile) => {
+                this.setProfileForm(profile);
+                this.twoFactorSetupLoading.set(false);
+                this.twoFactorSetupOpen.set(false);
+                this.twoFactorMessage.set('Doble factor desactivado.');
+            },
+            error: () => {
+                this.twoFactorSetupLoading.set(false);
+                this.twoFactorError.set('No se ha podido desactivar el doble factor.');
             },
         });
     }
@@ -321,6 +537,12 @@ export class Espectaculos implements OnInit, OnDestroy {
             hour: '2-digit',
             minute: '2-digit',
         }).format(date);
+    }
+
+    openAccountTickets(mode: 'upcoming' | 'past') {
+        this.entradasOpen.set(true);
+        this.accountTicketsMode.set(mode);
+        this.loadAccountTickets();
     }
 
     colaTurnoTiempo() {
@@ -688,6 +910,7 @@ export class Espectaculos implements OnInit, OnDestroy {
                 const estado = await firstValueFrom(this.compraService.confirmarPago(result.paymentIntent.id));
                 this.resultadoPago.set(estado);
                 if (estado.status === 'succeeded') {
+                    this.savePurchasedTickets();
                     this.resetCompraState(false);
                     await this.recargarEntradasActivas();
                     this.cargarExplora();
@@ -800,6 +1023,112 @@ export class Espectaculos implements OnInit, OnDestroy {
         }
         this.compraError.set('');
         this.reservaSeconds.set(0);
+    }
+
+    private setProfileForm(user: UserProfile) {
+        this.profileNombre.set(user.nombre || '');
+        this.profileApellidos.set(user.apellidos || '');
+        this.profileEmail.set(user.email || '');
+        this.profileUsername.set(user.username || '');
+        this.profileFechaNacimiento.set(user.fechaNacimiento || '');
+        this.profileRol.set(user.rol || '');
+        this.profileTwoFactorEnabled.set(!!user.twoFactorEnabled);
+    }
+
+    private clearProfileForm() {
+        this.profileNombre.set('');
+        this.profileApellidos.set('');
+        this.profileEmail.set('');
+        this.profileUsername.set('');
+        this.profileFechaNacimiento.set('');
+        this.profileRol.set('');
+        this.profileTwoFactorEnabled.set(false);
+        this.profileEditing.set(false);
+        this.profileSaving.set(false);
+        this.profileMessage.set('');
+        this.profileError.set('');
+        this.twoFactorSetupOpen.set(false);
+        this.twoFactorSetupLoading.set(false);
+        this.twoFactorQrUrl.set('');
+        this.twoFactorSecretKey.set('');
+        this.twoFactorSetupCode.set('');
+        this.twoFactorMessage.set('');
+        this.twoFactorError.set('');
+    }
+
+    private resetAuthTwoFactorSetup() {
+        this.twoFactorSetupOpen.set(false);
+        this.twoFactorSetupLoading.set(false);
+        this.twoFactorQrUrl.set('');
+        this.twoFactorSecretKey.set('');
+        this.twoFactorSetupCode.set('');
+        this.twoFactorMessage.set('');
+        this.twoFactorError.set('');
+    }
+
+    private savePurchasedTickets() {
+        const espectaculo = this.espectaculoActivo();
+        if (!espectaculo || this.entradasSeleccionadasCompra().length === 0) {
+            return;
+        }
+
+        const selectedIds = new Set(this.entradasSeleccionadasCompra());
+        const purchasedAt = new Date().toISOString();
+        const newTickets = this.entradasDisponibles()
+            .filter((entrada) => selectedIds.has(entrada.id))
+            .map((entrada) => ({
+                id: `${entrada.id}-${purchasedAt}`,
+                entradaId: entrada.id,
+                artista: espectaculo.artista,
+                escenario: espectaculo.escenario,
+                fecha: espectaculo.fecha,
+                descripcion: entrada.descripcion,
+                precio: entrada.precio,
+                purchasedAt,
+            }));
+
+        if (newTickets.length === 0) {
+            return;
+        }
+
+        const tickets = [...newTickets, ...this.readAccountTickets()];
+        this.accountTickets.set(tickets);
+        this.writeAccountTickets(tickets);
+    }
+
+    private loadAccountTickets() {
+        this.accountTickets.set(this.readAccountTickets());
+    }
+
+    private readAccountTickets() {
+        if (!this.isBrowser()) {
+            return [];
+        }
+
+        const raw = localStorage.getItem(this.accountTicketsStorageKey());
+        if (!raw) {
+            return [];
+        }
+
+        try {
+            const tickets = JSON.parse(raw) as AccountTicket[];
+            return Array.isArray(tickets) ? tickets : [];
+        } catch {
+            return [];
+        }
+    }
+
+    private writeAccountTickets(tickets: AccountTicket[]) {
+        if (!this.isBrowser()) {
+            return;
+        }
+
+        localStorage.setItem(this.accountTicketsStorageKey(), JSON.stringify(tickets));
+    }
+
+    private accountTicketsStorageKey() {
+        const email = this.authEmail().trim().toLowerCase() || 'local';
+        return `${Espectaculos.TICKETS_STORAGE_PREFIX}${email}`;
     }
 
     private resetEntradaFilters(){
@@ -958,18 +1287,49 @@ export class Espectaculos implements OnInit, OnDestroy {
         this.authMessage.set('');
         this.authError.set('');
 
+        if (this.authMode() === 'twoFactor') {
+            this.submitTwoFactorLogin();
+            return;
+        }
+
+        if (this.authMode() === 'registerTwoFactor') {
+            this.confirmRegisterTwoFactorSetup();
+            return;
+        }
+
         if (this.authMode() === 'register' && !this.canRegister()) {
             this.authError.set(this.authGenericError);
             return;
         }
 
         this.authSubmitting.set(true);
-        const request = this.authMode() === 'login'
-            ? this.http.post(`${USER_API_BASE_URL}/users/login`, {
+        if (this.authMode() === 'login') {
+            this.http.post<LoginResponse>(`${USER_API_BASE_URL}/users/login`, {
                 name: this.authEmail().trim(),
                 pwd: this.authPassword(),
-            }, { withCredentials: true })
-            : this.http.post(`${USER_API_BASE_URL}/users/register`, {
+            }, { withCredentials: true }).subscribe({
+                next: (response) => {
+                    this.authError.set('');
+                    this.authSubmitting.set(false);
+                    if (response.twoFactorRequired) {
+                        this.twoFactorChallengeToken.set(response.twoFactorChallengeToken || '');
+                        this.authMode.set('twoFactor');
+                        this.authPassword.set('');
+                        this.authMessage.set('Introduce el codigo de tu app autenticadora.');
+                        return;
+                    }
+                    this.completeLogin(response.user);
+                },
+                error: () => {
+                    this.authError.set(this.authGenericError);
+                    this.authMessage.set('');
+                    this.authSubmitting.set(false);
+                },
+            });
+            return;
+        }
+
+        this.http.post<UserProfile>(`${USER_API_BASE_URL}/users/register`, {
                 nombre: this.registerNombre().trim(),
                 apellidos: this.registerApellidos().trim(),
                 email: this.authEmail().trim(),
@@ -977,18 +1337,103 @@ export class Espectaculos implements OnInit, OnDestroy {
                 fechaNacimiento: this.registerFechaNacimiento() || null,
                 password: this.authPassword(),
                 confirmPassword: this.authPasswordRepeat(),
-            }, { withCredentials: true });
-
-        request.subscribe({
-            next: () => {
+            }, { withCredentials: true }).subscribe({
+            next: (response) => {
                 this.authError.set('');
                 this.authSubmitting.set(false);
-                this.completeLogin();
+                if (this.registerEnableTwoFactor()) {
+                    this.beginRegisterTwoFactorSetup(response);
+                    return;
+                }
+                this.completeLogin(response);
             },
             error: () => {
                 this.authError.set(this.authGenericError);
                 this.authMessage.set('');
                 this.authSubmitting.set(false);
+            },
+        });
+    }
+
+    private beginRegisterTwoFactorSetup(profile: UserProfile) {
+        this.pendingRegisterProfile.set(profile);
+        this.setProfileForm(profile);
+        this.authMode.set('registerTwoFactor');
+        this.authMessage.set('');
+        this.authError.set('');
+        this.resetAuthTwoFactorSetup();
+        this.twoFactorSetupLoading.set(true);
+
+        this.http.post<TwoFactorSetupResponse>(
+            `${USER_API_BASE_URL}/users/2fa/setup`,
+            {},
+            { withCredentials: true },
+        ).subscribe({
+            next: (setup) => {
+                this.twoFactorQrUrl.set(setup.qrUrl);
+                this.twoFactorSecretKey.set(setup.secretKey);
+                this.twoFactorSetupOpen.set(true);
+                this.twoFactorSetupLoading.set(false);
+            },
+            error: () => {
+                this.twoFactorSetupLoading.set(false);
+                this.authError.set('La cuenta se ha creado, pero no se ha podido preparar el 2FA.');
+            },
+        });
+    }
+
+    private confirmRegisterTwoFactorSetup() {
+        const code = this.twoFactorSetupCode().trim();
+        if (!/^\d{6}$/.test(code)) {
+            this.authError.set('Introduce un codigo de 6 digitos.');
+            return;
+        }
+
+        this.authSubmitting.set(true);
+        this.authError.set('');
+        this.http.post<UserProfile>(
+            `${USER_API_BASE_URL}/users/2fa/verify`,
+            { code },
+            { withCredentials: true },
+        ).subscribe({
+            next: (profile) => {
+                this.authSubmitting.set(false);
+                this.resetAuthTwoFactorSetup();
+                this.completeLogin(profile);
+            },
+            error: () => {
+                this.authSubmitting.set(false);
+                this.authError.set('Codigo 2FA invalido. Revisa la app autenticadora.');
+            },
+        });
+    }
+
+    private submitTwoFactorLogin() {
+        const code = this.twoFactorCode().trim();
+        if (!this.twoFactorChallengeToken() || !/^\d{6}$/.test(code)) {
+            this.authError.set('Introduce un codigo de 6 digitos.');
+            return;
+        }
+
+        this.authSubmitting.set(true);
+        this.http.post<UserProfile>(
+            `${USER_API_BASE_URL}/users/2fa/login/verify`,
+            {
+                challengeToken: this.twoFactorChallengeToken(),
+                code,
+            },
+            { withCredentials: true },
+        ).subscribe({
+            next: (profile) => {
+                this.authSubmitting.set(false);
+                this.authError.set('');
+                this.authMessage.set('');
+                this.completeLogin(profile);
+            },
+            error: () => {
+                this.authSubmitting.set(false);
+                this.authError.set('Codigo 2FA invalido o caducado.');
+                this.authMessage.set('');
             },
         });
     }
@@ -1005,14 +1450,23 @@ export class Espectaculos implements OnInit, OnDestroy {
         };
     }
 
-    private completeLogin(){
+    private completeLogin(user?: UserProfile){
         this.isLoggedIn.set(true);
-        const displayName = this.getDisplayName();
+        if (user) {
+            this.setProfileForm(user);
+            this.authEmail.set(user.email || this.authEmail());
+        }
+        const displayName = user?.nombre || user?.username || this.getDisplayName();
         this.userDisplayName.set(displayName);
-        this.storeAuthSession(displayName, this.authEmail().trim());
+        this.storeAuthSession(displayName, user?.email || this.authEmail().trim());
         this.authPassword.set('');
         this.authPasswordRepeat.set('');
+        this.registerEnableTwoFactor.set(false);
+        this.twoFactorCode.set('');
+        this.twoFactorChallengeToken.set('');
+        this.pendingRegisterProfile.set(null);
         this.cerrarAuthModal();
+        this.cargarSesion();
     }
 
     private restoreAuthSession(){
