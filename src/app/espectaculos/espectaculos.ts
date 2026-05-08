@@ -117,12 +117,22 @@ export class Espectaculos implements OnInit, OnDestroy {
     espectaculosExplora = signal<EspectaculoResultado[]>([]);
     exploraLoading = signal(false);
     exploraError = signal('');
+    exploraStats = signal<Record<number, { precioMinimo: number | null; disponibilidad: number | null }>>({});
     espectaculoActivo = signal<EspectaculoResultado | null>(null);
     entradasDisponibles = signal<EntradaDisponible[]>([]);
     entradasLoading = signal(false);
     entradasError = signal('');
     entradasSeleccionadasCompra = signal<number[]>([]);
     entradaOrden = signal<'default' | 'priceAsc' | 'visibility'>('default');
+    exploraOrden = signal<
+    'default'
+    | 'dateAsc'
+    | 'dateDesc'
+    | 'priceAsc'
+    | 'priceDesc'
+    | 'availabilityDesc'
+    | 'availabilityAsc'
+    >('default');
     filtroZona = signal('');
     filtroPlanta = signal('');
     filtroFila = signal('');
@@ -167,7 +177,56 @@ export class Espectaculos implements OnInit, OnDestroy {
             })
             .slice(0, 6);
     });
-    espectaculosExploraAgrupados = computed(() => this.groupByArtist(this.espectaculosExplora()));
+    espectaculosExploraAgrupados = computed(() => {
+    const espectaculos = this.groupByArtist(this.espectaculosExplora());
+
+    switch (this.exploraOrden()) {
+        case 'dateAsc':
+            return this.sortByNullableNumber(
+                espectaculos,
+                (espectaculo) => this.fechaExploraValue(espectaculo, 'asc'),
+                'asc',
+            );
+
+        case 'dateDesc':
+            return this.sortByNullableNumber(
+                espectaculos,
+                (espectaculo) => this.fechaExploraValue(espectaculo, 'desc'),
+                'desc',
+            );
+
+        case 'priceAsc':
+            return this.sortByNullableNumber(
+                espectaculos,
+                (espectaculo) => this.precioExploraValue(espectaculo),
+                'asc',
+            );
+
+        case 'priceDesc':
+            return this.sortByNullableNumber(
+                espectaculos,
+                (espectaculo) => this.precioExploraValue(espectaculo),
+                'desc',
+            );
+
+        case 'availabilityDesc':
+            return this.sortByNullableNumber(
+                espectaculos,
+                (espectaculo) => this.disponibilidadExploraValue(espectaculo),
+                'desc',
+            );
+
+        case 'availabilityAsc':
+            return this.sortByNullableNumber(
+                espectaculos,
+                (espectaculo) => this.disponibilidadExploraValue(espectaculo),
+                'asc',
+            );
+
+        default:
+            return espectaculos;
+    }
+    });
     entradasFiltradas = computed(() => {
         let entradas = this.entradasDisponibles().filter((entrada) => {
             const detalle = this.detalleEntrada(entrada);
@@ -231,18 +290,55 @@ export class Espectaculos implements OnInit, OnDestroy {
     cargarExplora(){
         this.exploraLoading.set(true);
         this.exploraError.set('');
+        this.exploraStats.set({});
 
         this.espectaculoService.buscarEspectaculos('').subscribe({
             next: (resultados) => {
                 this.espectaculosExplora.set(resultados);
                 this.exploraLoading.set(false);
+                void this.cargarStatsExplora(resultados);
             },
             error: () => {
                 this.espectaculosExplora.set([]);
+                this.exploraStats.set({});
                 this.exploraError.set('No se han podido cargar los espectaculos destacados.');
                 this.exploraLoading.set(false);
             },
         });
+    }
+
+    private async cargarStatsExplora(espectaculos: EspectaculoResultado[]) {
+    const stats: Record<number, { precioMinimo: number | null; disponibilidad: number | null }> = {};
+
+    await Promise.all(
+        espectaculos.map(async (espectaculo) => {
+            try {
+                const entradas = await firstValueFrom(
+                    this.espectaculoService.getEntradasDisponibles(espectaculo.id, '')
+                );
+
+                if (!entradas || entradas.length === 0) {
+                    stats[espectaculo.id] = {
+                        precioMinimo: null,
+                        disponibilidad: 0,
+                    };
+                    return;
+                }
+
+                stats[espectaculo.id] = {
+                    precioMinimo: Math.min(...entradas.map((entrada) => entrada.precio)),
+                    disponibilidad: entradas.length,
+                };
+            } catch {
+                stats[espectaculo.id] = {
+                    precioMinimo: null,
+                    disponibilidad: null,
+                };
+            }
+        })
+    );
+
+    this.exploraStats.set(stats);
     }
 
     abrirAuthModal(mode: 'login' | 'register'){
@@ -793,6 +889,14 @@ export class Espectaculos implements OnInit, OnDestroy {
         }).format(precio / 100);
     }
 
+    precioExplora(espectaculo: EspectaculoResultado): number | null {
+        return this.precioExploraValue(espectaculo);
+    }
+
+    disponibilidadExplora(espectaculo: EspectaculoResultado): number | null {
+        return this.disponibilidadExploraValue(espectaculo);
+    }
+
     tipoUbicacion(entrada: EntradaDisponible){
         const descripcion = entrada.descripcion.toLowerCase();
 
@@ -843,6 +947,15 @@ export class Espectaculos implements OnInit, OnDestroy {
         this.buscarDesdeBarra();
     }
 
+    borrarFechaResultados(): void {
+        this.searchDate.set('');
+        this.searchDateText.set('');
+        this.resultsDateText.set('');
+        this.appliedSearchDate.set('');
+
+        this.buscarDesdeBarra();
+    }
+
     reservaTiempo() {
         const minutes = Math.floor(this.reservaSeconds() / 60).toString().padStart(2, '0');
         const seconds = (this.reservaSeconds() % 60).toString().padStart(2, '0');
@@ -881,6 +994,26 @@ export class Espectaculos implements OnInit, OnDestroy {
         } finally {
             this.reservandoCompra.set(false);
         }
+    }
+
+    reservarYPagarYScroll(): void {
+    const resultadoReserva = this.reservarYPagar();
+
+    Promise.resolve(resultadoReserva).finally(() => {
+        setTimeout(() => {
+        document.querySelector('.payment-box')?.scrollIntoView({
+            behavior: 'smooth',
+            block: 'start',
+        });
+        }, 300);
+    });
+    }
+
+    scrollArribaEntradas(): void {
+        document.getElementById('ticket-panel-top')?.scrollIntoView({
+            behavior: 'smooth',
+            block: 'start',
+        });
     }
 
     async confirmarPago() {
@@ -1249,6 +1382,121 @@ export class Espectaculos implements OnInit, OnDestroy {
             .trim();
     }
 
+    private sortByNullableNumber(
+    espectaculos: EspectaculoResultado[],
+    getValue: (espectaculo: EspectaculoResultado) => number | null,
+    direction: 'asc' | 'desc',
+) {
+    return [...espectaculos].sort((a, b) => {
+        const aValue = getValue(a);
+        const bValue = getValue(b);
+
+        if (aValue === null && bValue === null) {
+            return 0;
+        }
+
+        if (aValue === null) {
+            return 1;
+        }
+
+        if (bValue === null) {
+            return -1;
+        }
+
+        return direction === 'asc' ? aValue - bValue : bValue - aValue;
+    });
+}
+
+private fechaExploraValue(espectaculo: EspectaculoResultado, mode: 'asc' | 'desc'): number | null {
+    const fechas = this.eventosExploraPorArtista(espectaculo)
+        .map((item) => new Date(item.fecha).getTime())
+        .filter((value) => !Number.isNaN(value));
+
+    if (fechas.length === 0) {
+        return null;
+    }
+
+    return mode === 'asc' ? Math.min(...fechas) : Math.max(...fechas);
+}
+
+private precioExploraValue(espectaculo: EspectaculoResultado): number | null {
+    const precios = this.eventosExploraPorArtista(espectaculo)
+        .map((item) => this.exploraStats()[item.id]?.precioMinimo)
+        .filter((value): value is number => typeof value === 'number' && !Number.isNaN(value));
+
+    if (precios.length === 0) {
+        return null;
+    }
+
+    return Math.min(...precios);
+}
+
+private disponibilidadExploraValue(espectaculo: EspectaculoResultado): number | null {
+    const disponibilidades = this.eventosExploraPorArtista(espectaculo)
+        .map((item) => this.exploraStats()[item.id]?.disponibilidad)
+        .filter((value): value is number => typeof value === 'number' && !Number.isNaN(value));
+
+    if (disponibilidades.length === 0) {
+        return null;
+    }
+
+    return disponibilidades.reduce((total, value) => total + value, 0);
+}
+
+private eventosExploraPorArtista(espectaculo: EspectaculoResultado) {
+    const artistaKey = this.baseArtistKey(espectaculo.artista);
+
+    return this.espectaculosExplora().filter(
+        (item) => this.baseArtistKey(item.artista) === artistaKey,
+    );
+}
+
+private precioEventoValue(espectaculo: EspectaculoResultado): number | null {
+    const item = espectaculo as EspectaculoResultado & {
+        precioMinimo?: number;
+        precioDesde?: number;
+        precio?: number;
+        minPrecio?: number;
+        entradaMasBarata?: number;
+    };
+
+    return this.firstNumber(
+        item.precioMinimo,
+        item.precioDesde,
+        item.minPrecio,
+        item.entradaMasBarata,
+        item.precio,
+    );
+}
+
+private disponibilidadEventoValue(espectaculo: EspectaculoResultado): number | null {
+    const item = espectaculo as EspectaculoResultado & {
+        entradasDisponibles?: number;
+        entradasLibres?: number;
+        libres?: number;
+        disponibilidad?: number;
+        entradas?: {
+            libres?: number;
+            disponibles?: number;
+            total?: number;
+        };
+    };
+
+    return this.firstNumber(
+        item.entradasDisponibles,
+        item.entradasLibres,
+        item.libres,
+        item.disponibilidad,
+        item.entradas?.libres,
+        item.entradas?.disponibles,
+        item.entradas?.total,
+    );
+    }
+
+    private firstNumber(...values: Array<number | undefined | null>) {
+        const value = values.find((item) => typeof item === 'number' && !Number.isNaN(item));
+        return value ?? null;
+    }
     private groupByArtist(espectaculos: EspectaculoResultado[]){
         const grouped = new Map<string, EspectaculoResultado>();
 

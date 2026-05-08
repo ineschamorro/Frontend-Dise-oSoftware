@@ -6,7 +6,6 @@
 
 .home-shell {
   min-height: 100vh;
-  overflow: hidden;
 }
 
 .topbar {
@@ -1775,4 +1774,123 @@ h1 {
 }
 .search-date-text {
   padding-right: 2.4rem;
+}
+
+.date-filter.disabled,
+.results-date-filter.disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.date-filter.disabled input,
+.results-date-filter.disabled input,
+.date-filter.disabled button,
+.results-date-filter.disabled button {
+  cursor: not-allowed;
+}
+
+.ticket-heading-actions {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+
+.sticky-checkout-summary {
+  position: sticky;
+  top: 16px;
+  z-index: 20;
+  margin: 18px 0;
+  padding: 14px 18px;
+  border: 1px solid #e7edf6;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 14px 35px rgba(15, 23, 42, 0.08);
+  backdrop-filter: blur(12px);
+}
+
+.sticky-checkout-summary strong {
+  display: block;
+  margin-top: 4px;
+}
+
+.sticky-checkout-summary p {
+  margin: 6px 0 0;
+  font-weight: 800;
+  color: #52637d;
+}
+
+.scroll-top-button {
+  position: fixed;
+  right: 28px;
+  bottom: 28px;
+  z-index: 50;
+  width: 52px;
+  height: 52px;
+  border: 0;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #ec149c, #155dfc);
+  color: white;
+  font-size: 28px;
+  font-weight: 900;
+  cursor: pointer;
+  box-shadow: 0 18px 40px rgba(236, 20, 156, 0.28);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.scroll-top-button:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 22px 50px rgba(21, 93, 252, 0.28);
+}
+
+.explore-filters {
+  align-items: end;
+  background: #f8fafc;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 0.75rem;
+  display: grid;
+  gap: 0.85rem;
+  grid-template-columns: minmax(220px, 320px);
+  margin: 0 0 1rem;
+  padding: 1rem;
+}
+
+.explore-filters label {
+  color: #475569;
+  display: grid;
+  font-size: 0.78rem;
+  font-weight: 900;
+  gap: 0.35rem;
+  text-transform: uppercase;
+}
+
+.explore-filters select {
+  background: #ffffff;
+  border: 1px solid #d1d5db;
+  border-radius: 0.55rem;
+  color: #111827;
+  font-size: 0.95rem;
+  font-weight: 800;
+  min-height: 2.7rem;
+  outline: none;
+  padding: 0 0.75rem;
+  text-transform: none;
+  width: 100%;
+}
+
+.explore-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: 0.8rem;
+}
+
+.explore-card-meta span {
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  border-radius: 999px;
+  color: #475569;
+  font-size: 0.78rem;
+  font-weight: 900;
+  padding: 0.28rem 0.58rem;
 }

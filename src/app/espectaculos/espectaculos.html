@@ -23,7 +23,7 @@
 
   <section class="search-band" aria-label="Busqueda de entradas">
     <form class="search-panel" (ngSubmit)="buscarDesdeBarra()">
-      <label class="date-filter" aria-label="Seleccionar fechas">
+      <label class="date-filter" [class.disabled]="!!espectaculoActivo()" aria-label="Seleccionar fechas">
         <span class="calendar-icon" aria-hidden="true">
           <svg viewBox="0 0 24 24" focusable="false">
             <path d="M7 2v4M17 2v4M3 9h18M5 4h14a2 2 0 0 1 2 2v11l-5 5H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z" />
@@ -39,6 +39,7 @@
             inputmode="numeric"
             maxlength="10"
             placeholder="dd/mm/aaaa"
+            [disabled]="!!espectaculoActivo()"
             [ngModel]="searchDateText()"
             (ngModelChange)="onSearchDateTextChange($event)"
           />
@@ -46,23 +47,26 @@
             type="button"
             class="search-date-button"
             aria-label="Seleccionar fecha"
+            [disabled]="!!espectaculoActivo()"
             (click)="fechaBusquedaPicker.showPicker()"
           ></button>
-          <input
-            #fechaBusquedaPicker
-            class="search-date-picker"
-            type="date"
-            tabindex="-1"
-            [ngModel]="searchDate()"
-            [ngModelOptions]="{standalone: true}"
-            (ngModelChange)="setSearchDateFromPicker($event)"
-          />
+        <input
+          #fechaBusquedaPicker
+          class="search-date-picker"
+          type="date"
+          tabindex="-1"
+          [disabled]="!!espectaculoActivo()"
+          [ngModel]="searchDate()"
+          [ngModelOptions]="{standalone: true}"
+          (ngModelChange)="setSearchDateFromPicker($event)"
+        />
         </span>
         <button
           type="button"
           class="clear-date"
           *ngIf="searchDateText() || searchDate()"
           aria-label="Quitar fecha"
+          [disabled]="!!espectaculoActivo()"
           (click)="limpiarFecha()"
         >
           x
@@ -130,6 +134,21 @@
       <h2>Todos los espectaculos disponibles</h2>
     </div>
 
+    <div class="explore-filters">
+      <label>
+        Ordenar por
+        <select [ngModel]="exploraOrden()" (ngModelChange)="exploraOrden.set($event)">
+          <option value="default">Orden por defecto</option>
+          <option value="dateAsc">Fecha más cercana</option>
+          <option value="dateDesc">Fecha más lejana</option>
+          <option value="priceAsc">Entrada más barata</option>
+          <option value="priceDesc">Entrada más cara</option>
+          <option value="availabilityDesc">Más entradas disponibles</option>
+          <option value="availabilityAsc">Menos entradas disponibles</option>
+        </select>
+      </label>
+    </div>
+
     <p class="muted-state" *ngIf="exploraLoading()">Cargando espectaculos...</p>
     <p class="auth-error" *ngIf="exploraError()">{{ exploraError() }}</p>
     <p class="muted-state" *ngIf="!exploraLoading() && !exploraError() && espectaculosExplora().length === 0">
@@ -145,6 +164,19 @@
       >
         <h3>{{ espectaculo.artista }}</h3>
         <p>{{ espectaculo.escenario }}</p>
+        <div class="explore-card-meta">
+          <span>
+            {{ formatFecha(espectaculo.fecha).dia }} {{ formatFecha(espectaculo.fecha).mes }}
+          </span>
+
+          <span *ngIf="precioExplora(espectaculo) !== null">
+            Desde {{ formatEuros(precioExplora(espectaculo)!) }}
+          </span>
+
+          <span *ngIf="disponibilidadExplora(espectaculo) !== null">
+            {{ disponibilidadExplora(espectaculo) }} entradas disponibles
+          </span>
+        </div>
         <small *ngIf="!espectaculo.altaDemanda">Ver fechas disponibles</small>
         <small *ngIf="espectaculo.altaDemanda">
           Alta demanda - cola {{ formatAperturaTaquilla(espectaculo.aperturaTaquilla) }}
@@ -155,7 +187,7 @@
 
   <section class="results-section" *ngIf="searchTouched() || espectaculoActivo()" aria-label="Resultados de busqueda">
     <div class="results-page-header">
-      <label class="results-date-filter">
+      <label class="results-date-filter" [class.disabled]="!!espectaculoActivo()">
         <span>Fechas</span>
         <strong>
           <span class="calendar-icon" aria-hidden="true">
@@ -171,6 +203,7 @@
             inputmode="numeric"
             maxlength="10"
             placeholder="dd/mm/aaaa"
+            [disabled]="!!espectaculoActivo()"
             [ngModel]="resultsDateText()"
             (ngModelChange)="onResultsDateTextChange($event)"
           />
@@ -178,6 +211,7 @@
             type="button"
             class="results-date-button"
             aria-label="Seleccionar fecha"
+            [disabled]="!!espectaculoActivo()"
             (click)="fechaResultadosPicker.showPicker()"
           ></button>
           <input
@@ -186,14 +220,29 @@
             type="date"
             tabindex="-1"
             aria-label="Seleccionar fecha"
+            [disabled]="!!espectaculoActivo()"
             [ngModel]="searchDate()"
             [ngModelOptions]="{standalone: true}"
             (ngModelChange)="setResultsDateFromPicker($event)"
           />
         </strong>
       </label>
-      <button type="button" class="secondary-button" (click)="aplicarFechaResultados()">
+      <button
+        type="button"
+        class="secondary-button"
+        [disabled]="!!espectaculoActivo()"
+        (click)="aplicarFechaResultados()"
+      >
         Aplicar fecha
+      </button>
+
+      <button
+        type="button"
+        class="secondary-button"
+        [disabled]="!!espectaculoActivo() || (!resultsDateText() && !searchDate() && !appliedSearchDate())"
+        (click)="borrarFechaResultados()"
+      >
+        Borrar fecha
       </button>
     </div>
 
@@ -212,7 +261,7 @@
         {{
           appliedSearchTerm()
             ? 'Resultados para ' + appliedSearchTerm()
-            : 'Conciertos en Espana'
+            : 'Espectaculos en España'
         }}
       </h2>
 
@@ -250,17 +299,40 @@
       </div>
     </div>
 
-    <div class="ticket-panel" *ngIf="espectaculoActivo()">
+    <div id="ticket-panel-top" class="ticket-panel" *ngIf="espectaculoActivo()">
       <div class="ticket-heading">
         <div>
           <span class="results-kicker">Ubicaciones disponibles</span>
           <h2>{{ espectaculoActivo()?.artista }}</h2>
           <p>{{ espectaculoActivo()?.escenario }} · {{ formatFecha(espectaculoActivo()!.fecha).dia }} {{ formatFecha(espectaculoActivo()!.fecha).mes }} · {{ formatFecha(espectaculoActivo()!.fecha).hora }}</p>
         </div>
-        <button type="button" class="secondary-button" (click)="volverAResultados()">
-          Volver atras
-        </button>
+
+        <div class="ticket-heading-actions">
+          <button type="button" class="secondary-button" (click)="volverAResultados()">
+            Volver atrás
+          </button>
+
+          <button
+            type="button"
+            class="tickets-button"
+            *ngIf="entradasDisponibles().length > 0"
+            [disabled]="entradasSeleccionadasCompra().length === 0 || reservandoCompra() || !!paymentIntent()"
+            (click)="reservarYPagarYScroll()"
+          >
+            {{ reservandoCompra() ? 'Reservando...' : 'Reservar y pagar' }}
+            <span aria-hidden="true"></span>
+          </button>
+        </div>
       </div>
+
+      <div class="sticky-checkout-summary" *ngIf="entradasDisponibles().length > 0">
+        <div>
+          <span class="results-kicker">Compra</span>
+          <strong>{{ entradasSeleccionadasCompra().length }} entrada(s) seleccionada(s)</strong>
+          <p>Total: {{ formatEuros(totalSeleccionado()) }}</p>
+        </div>
+      </div>
+
 
       <div class="queue-box" *ngIf="espectaculoActivo()?.altaDemanda">
         <div>
@@ -382,23 +454,6 @@
         </article>
       </div>
 
-      <div class="checkout-box" *ngIf="entradasDisponibles().length > 0">
-        <div>
-          <span class="results-kicker">Compra</span>
-          <strong>{{ entradasSeleccionadasCompra().length }} entrada(s) seleccionada(s)</strong>
-          <p>Total: {{ formatEuros(totalSeleccionado()) }}</p>
-        </div>
-        <button
-          type="button"
-          class="tickets-button"
-          [disabled]="entradasSeleccionadasCompra().length === 0 || reservandoCompra() || !!paymentIntent()"
-          (click)="reservarYPagar()"
-        >
-          {{ reservandoCompra() ? 'Reservando...' : 'Reservar y pagar' }}
-          <span aria-hidden="true"></span>
-        </button>
-      </div>
-
       <div class="reserve-status" *ngIf="reservaActual() as reserva">
         <div>
           <strong>Reserva temporal activa</strong>
@@ -436,6 +491,15 @@
       </div>
     </div>
   </section>
+  <button
+    type="button"
+    class="scroll-top-button"
+    *ngIf="espectaculoActivo()"
+    aria-label="Volver arriba"
+    (click)="scrollArribaEntradas()"
+  >
+    ↑
+  </button>
 </main>
 
 <div class="modal-backdrop" *ngIf="authModalOpen()" (click)="cerrarAuthModal()">

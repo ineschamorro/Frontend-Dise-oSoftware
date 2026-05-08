@@ -85,5 +85,14 @@
       <p>Total cobrado: {{ formatEuros(resultado.amount) }} {{ resultado.currency.toUpperCase() }}</p>
       <a routerLink="/" class="back-link">Volver al catalogo</a>
     </div>
+
+    <a 
+      *ngIf="!resultadoPago()" 
+      href="#" 
+      class="back-link" 
+      style="display: block; margin-top: 20px;"
+      (click)="irAlCatalogo($event)">
+      Volver al catalogo
+    </a>
   </article>
 </section>

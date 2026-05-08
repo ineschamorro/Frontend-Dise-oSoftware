@@ -14,6 +14,7 @@ import {
 })
 export class CompraService {
   private static readonly QUEUE_CLIENT_KEY = 'esi.queue.client';
+  private static readonly ACTIVE_RESERVATION_KEY = 'esi.active.reservation.v2';
 
   constructor(private http: HttpClient) {}
 
@@ -49,6 +50,52 @@ export class CompraService {
 
   cancelarPago() {
     return this.http.post<void>(`${API_BASE_URL}/pagos/cancelar`, {}, { withCredentials: true });
+  }
+
+  marcaReservaActiva() {
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(CompraService.ACTIVE_RESERVATION_KEY, 'true');
+      console.log('✓ Reserva marcada como activa');
+    }
+  }
+
+  limpiaReservaActiva() {
+    if (typeof window !== 'undefined') {
+      window.localStorage.removeItem(CompraService.ACTIVE_RESERVATION_KEY);
+      console.log('✓ Reserva limpiada del localStorage');
+    }
+  }
+
+  tieneReservaActiva(): boolean {
+    if (typeof window === 'undefined') {
+      return false;
+    }
+    const activa = window.localStorage.getItem(CompraService.ACTIVE_RESERVATION_KEY) === 'true';
+    console.log('Verificando reserva activa:', activa);
+    return activa;
+  }
+
+  cancelarPagoEnUnload() {
+    // Usar sendBeacon para cancelar de forma confiable en beforeunload
+    const url = `${API_BASE_URL}/pagos/cancelar`;
+    try {
+      navigator.sendBeacon(url, JSON.stringify({}));
+      console.log('✓ Enviado beacon para cancelar pago');
+    } catch (error) {
+      console.error('Error enviando beacon:', error);
+      // Intentar con fetch como fallback
+      try {
+        fetch(url, {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({}),
+          keepalive: true,
+        }).catch(() => {});
+      } catch (e) {
+        console.error('Error en fallback fetch:', e);
+      }
+    }
   }
 
   entrarEnCola(espectaculoId: number) {

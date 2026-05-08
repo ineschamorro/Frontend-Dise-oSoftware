@@ -1,4 +1,4 @@
-import { CommonModule, isPlatformBrowser } from '@angular/common';
+import { CommonModule, isPlatformBrowser, Location } from '@angular/common';
 import {
   AfterViewInit,
   Component,
@@ -10,7 +10,7 @@ import {
   inject,
   signal,
 } from '@angular/core';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { CompraService } from './compra.service';
 import {
@@ -31,6 +31,8 @@ export class CompraComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('paymentElementHost') paymentElementHost?: ElementRef<HTMLDivElement>;
 
   private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
+  private readonly location = inject(Location);
   private readonly compraService = inject(CompraService);
   private readonly platformId = inject(PLATFORM_ID);
 
@@ -51,6 +53,8 @@ export class CompraComponent implements OnInit, AfterViewInit, OnDestroy {
   private paymentElement: any = null;
   private queueAccessToken = '';
   private colaTimerId: ReturnType<typeof setInterval> | null = null;
+  private permitirSalida = false;
+  private beforeUnloadListener: ((event: BeforeUnloadEvent) => void) | null = null;
 
   async ngOnInit() {
     this.espectaculoId = Number(this.route.snapshot.paramMap.get('espectaculoId') ?? 0);
@@ -59,6 +63,24 @@ export class CompraComponent implements OnInit, AfterViewInit, OnDestroy {
       this.cargando.set(false);
       return;
     }
+    
+    if (isPlatformBrowser(this.platformId)) {
+      // IMPORTANTE: Verificar si hay una reserva incompleta del usuario anterior
+      // Esto ocurre si el usuario recargó la página, fue atrás, cerró el navegador, etc.
+      if (this.compraService.tieneReservaActiva()) {
+        console.log('Detectada reserva activa del usuario anterior. Cancelando...');
+        try {
+          await firstValueFrom(this.compraService.cancelarPago());
+          console.log('✓ Reserva anterior cancelada exitosamente');
+        } catch (error) {
+          console.error('Error cancelando reserva anterior:', error);
+        }
+        this.compraService.limpiaReservaActiva();
+      }
+      
+      this.setupExitHandlers();
+    }
+    
     await this.cargarEntradas();
   }
 
@@ -71,6 +93,68 @@ export class CompraComponent implements OnInit, AfterViewInit, OnDestroy {
   ngOnDestroy() {
     this.clearColaTimer();
     this.unmountPaymentElement();
+    this.removeBeforeUnloadListener();
+  }
+
+  private setupExitHandlers() {
+    // Evento beforeunload: recarga, cierre de navegador
+    // Este es el más importante para capturar cierres/recargas
+    this.beforeUnloadListener = (event: BeforeUnloadEvent) => {
+      if (this.paymentIntent() && !this.permitirSalida) {
+        console.log('beforeunload: Detectada salida con reserva activa');
+        // Cancelar la reserva de forma síncrona
+        this.compraService.cancelarPagoEnUnload();
+        // Mostrar diálogo de confirmación del navegador
+        event.preventDefault();
+        event.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', this.beforeUnloadListener);
+
+    // Navegar hacia atrás: botón atrás del navegador
+    window.history.pushState(null, '', window.location.href);
+    window.addEventListener('popstate', () => this.handlePopstate());
+  }
+
+  private async handlePopstate() {
+    if (this.paymentIntent() && !this.permitirSalida) {
+      console.log('popstate: Detectado clic en botón atrás con reserva activa');
+      const confirmar = window.confirm('¿Seguro que quieres salir? Se cancelará la reserva.');
+      if (confirmar) {
+        console.log('Usuario confirmó: cancelando reserva');
+        await this.handleCancelReserva();
+        this.permitirSalida = true;
+        window.history.back();
+      } else {
+        console.log('Usuario canceló: permaneciendo en la página');
+        // Restaurar el estado del historial
+        window.history.pushState(null, '', window.location.href);
+      }
+    }
+  }
+
+  private removeBeforeUnloadListener() {
+    if (this.beforeUnloadListener) {
+      window.removeEventListener('beforeunload', this.beforeUnloadListener);
+      this.beforeUnloadListener = null;
+    }
+  }
+
+  private async handleCancelReserva() {
+    this.permitirSalida = true;
+    this.error.set('');
+    try {
+      console.log('Cancelando reserva...');
+      await firstValueFrom(this.compraService.cancelarPago());
+      console.log('✓ Reserva cancelada exitosamente');
+      this.compraService.limpiaReservaActiva();
+      this.resetPaymentState();
+      await this.cargarEntradas();
+    } catch (error) {
+      console.error('Error cancelando reserva:', error);
+      this.error.set(this.toMessage(error));
+      this.permitirSalida = false;
+    }
   }
 
   isSelected(entradaId: number) {
@@ -114,6 +198,9 @@ export class CompraComponent implements OnInit, AfterViewInit, OnDestroy {
       this.reserva.set(reserva);
       const paymentIntent = await firstValueFrom(this.compraService.createPaymentIntent());
       this.paymentIntent.set(paymentIntent);
+      // Marcar que hay una reserva activa - IMPORTANTE para detectar salidas
+      this.compraService.marcaReservaActiva();
+      console.log('Reserva activa marcada. Temporizador de 10 minutos iniciado.');
       await this.mountStripeElement(paymentIntent);
     } catch (error) {
       this.error.set(this.toMessage(error));
@@ -149,6 +236,9 @@ export class CompraComponent implements OnInit, AfterViewInit, OnDestroy {
         const estado = await firstValueFrom(this.compraService.confirmarPago(result.paymentIntent.id));
         this.resultadoPago.set(estado);
         if (estado.status === 'succeeded') {
+          // Limpiar reserva activa cuando el pago se completa
+          this.compraService.limpiaReservaActiva();
+          this.permitirSalida = true;
           this.unmountPaymentElement();
           this.paymentIntent.set(null);
           this.reserva.set(null);
@@ -164,14 +254,22 @@ export class CompraComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   async cancelarReserva() {
-    this.error.set('');
-    try {
-      await firstValueFrom(this.compraService.cancelarPago());
-      this.resetPaymentState();
-      await this.cargarEntradas();
-    } catch (error) {
-      this.error.set(this.toMessage(error));
+    await this.handleCancelReserva();
+  }
+
+  async irAlCatalogo(event: Event) {
+    event.preventDefault();
+    
+    if (this.paymentIntent() && !this.permitirSalida) {
+      const confirmar = window.confirm('¿Seguro que quieres salir? Se cancelará la reserva.');
+      if (!confirmar) {
+        return;
+      }
+      await this.handleCancelReserva();
     }
+    
+    this.permitirSalida = true;
+    await this.router.navigate(['/']);
   }
 
   private async cargarEntradas() {
