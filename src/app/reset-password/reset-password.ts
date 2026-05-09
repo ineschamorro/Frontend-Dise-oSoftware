@@ -73,7 +73,7 @@ export class ResetPasswordComponent implements OnInit {
 
   submit() {
     if (!this.passwordValid()) {
-      this.error.set('No se pudo establecer la contrasena. Verifique la politica de seguridad.');
+      this.error.set('No se pudo establecer la contraseña. Verifique la política de seguridad.');
       return;
     }
 
@@ -98,7 +98,7 @@ export class ResetPasswordComponent implements OnInit {
         this.loading.set(false);
       },
       error: (error) => {
-        this.error.set(error?.error?.message || 'No se pudo establecer la contrasena. Verifique la politica de seguridad.');
+        this.error.set(error?.error?.message || 'No se pudo establecer la contraseña. Verifique la política de seguridad.');
         this.loading.set(false);
       },
     });

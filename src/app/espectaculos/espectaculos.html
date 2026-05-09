@@ -15,6 +15,53 @@
     </div>
   </nav>
 
+ <ng-container *ngIf="reservaActual() as reserva">
+  <section
+    class="active-reservation-banner"
+    *ngIf="!searchTouched() && !espectaculoActivo()"
+  >
+    <div class="active-reservation-content">
+      <span class="results-kicker">Reserva activa</span>
+
+      <strong>
+        {{ reserva.numeroEntradas }} entrada(s) reservada(s)
+        <ng-container *ngIf="numeroEspectaculosSeleccionados() > 0">
+          de {{ numeroEspectaculosSeleccionados() }} espectaculo(s)
+        </ng-container>
+      </strong>
+
+      <p>
+        Tienes {{ reservaTiempo() }} para completar el pago.
+        Total: {{ formatEuros(reserva.precioTotal) }}
+        <ng-container *ngIf="nombresEntradasReserva()">
+          · {{ nombresEntradasReserva() }}
+        </ng-container>
+      </p>
+    </div>
+
+    <div class="active-reservation-actions">
+      <button
+        type="button"
+        class="tickets-button"
+        [disabled]="reservandoCompra() || procesandoPago()"
+        (click)="continuarPagoReservaActiva()"
+      >
+        {{ paymentIntent() ? 'Volver al pago' : 'Continuar al pago' }}
+        <span aria-hidden="true"></span>
+      </button>
+
+      <button
+        type="button"
+        class="secondary-button"
+        [disabled]="reservandoCompra() || procesandoPago()"
+        (click)="cancelarReserva()"
+      >
+        Cancelar reserva
+      </button>
+    </div>
+  </section>
+</ng-container>
+
   <div class="top-return" *ngIf="searchTouched() || espectaculoActivo()">
     <button type="button" class="secondary-button back-home-button" (click)="volverInicio()">
       Inicio
@@ -50,16 +97,16 @@
             [disabled]="!!espectaculoActivo()"
             (click)="fechaBusquedaPicker.showPicker()"
           ></button>
-        <input
-          #fechaBusquedaPicker
-          class="search-date-picker"
-          type="date"
-          tabindex="-1"
-          [disabled]="!!espectaculoActivo()"
-          [ngModel]="searchDate()"
-          [ngModelOptions]="{standalone: true}"
-          (ngModelChange)="setSearchDateFromPicker($event)"
-        />
+          <input
+            #fechaBusquedaPicker
+            class="search-date-picker"
+            type="date"
+            tabindex="-1"
+            [disabled]="!!espectaculoActivo()"
+            [ngModel]="searchDate()"
+            [ngModelOptions]="{standalone: true}"
+            (ngModelChange)="setSearchDateFromPicker($event)"
+          />
         </span>
         <button
           type="button"
@@ -304,7 +351,12 @@
         <div>
           <span class="results-kicker">Ubicaciones disponibles</span>
           <h2>{{ espectaculoActivo()?.artista }}</h2>
-          <p>{{ espectaculoActivo()?.escenario }} · {{ formatFecha(espectaculoActivo()!.fecha).dia }} {{ formatFecha(espectaculoActivo()!.fecha).mes }} · {{ formatFecha(espectaculoActivo()!.fecha).hora }}</p>
+          <p>
+            {{ espectaculoActivo()?.escenario }} ·
+            {{ formatFecha(espectaculoActivo()!.fecha).dia }}
+            {{ formatFecha(espectaculoActivo()!.fecha).mes }} ·
+            {{ formatFecha(espectaculoActivo()!.fecha).hora }}
+          </p>
         </div>
 
         <div class="ticket-heading-actions">
@@ -316,10 +368,16 @@
             type="button"
             class="tickets-button"
             *ngIf="entradasDisponibles().length > 0"
-            [disabled]="entradasSeleccionadasCompra().length === 0 || reservandoCompra() || !!paymentIntent()"
+            [disabled]="entradasSeleccionadasCompra().length === 0 || reservandoCompra() || procesandoPago()"
             (click)="reservarYPagarYScroll()"
           >
-            {{ reservandoCompra() ? 'Reservando...' : 'Reservar y pagar' }}
+            {{
+              reservandoCompra()
+                ? 'Reservando...'
+                : reservaActual()
+                  ? 'Actualizar reserva y pagar'
+                  : 'Reservar y pagar'
+            }}
             <span aria-hidden="true"></span>
           </button>
         </div>
@@ -328,11 +386,15 @@
       <div class="sticky-checkout-summary" *ngIf="entradasDisponibles().length > 0">
         <div>
           <span class="results-kicker">Compra</span>
-          <strong>{{ entradasSeleccionadasCompra().length }} entrada(s) seleccionada(s)</strong>
+          <strong>
+            {{ entradasSeleccionadasCompra().length }} entrada(s) seleccionada(s)
+            <ng-container *ngIf="numeroEspectaculosSeleccionados() > 0">
+              de {{ numeroEspectaculosSeleccionados() }} espectaculo(s)
+            </ng-container>
+          </strong>
           <p>Total: {{ formatEuros(totalSeleccionado()) }}</p>
         </div>
       </div>
-
 
       <div class="queue-box" *ngIf="espectaculoActivo()?.altaDemanda">
         <div>
@@ -446,7 +508,7 @@
             type="button"
             class="secondary-button"
             [class.selected]="isEntradaSeleccionada(entrada.id)"
-            [disabled]="!!paymentIntent()"
+            [disabled]="reservandoCompra() || procesandoPago()"
             (click)="toggleEntradaCompra(entrada)"
           >
             {{ isEntradaSeleccionada(entrada.id) ? 'Seleccionada' : 'Seleccionar' }}
@@ -460,7 +522,12 @@
           <p>
             Tienes {{ reservaTiempo() }} para completar el pago. Despues las entradas se liberan automaticamente.
           </p>
-          <p>{{ reserva.numeroEntradas }} entrada(s) reservada(s) - {{ formatEuros(reserva.precioTotal) }}</p>
+          <p>
+            {{ reserva.numeroEntradas }} entrada(s) reservada(s) - {{ formatEuros(reserva.precioTotal) }}
+            <ng-container *ngIf="nombresEntradasReserva()">
+              · {{ nombresEntradasReserva() }}
+            </ng-container>
+          </p>
         </div>
         <button type="button" class="secondary-button" [disabled]="procesandoPago()" (click)="cancelarReserva()">
           Cancelar reserva
@@ -491,6 +558,7 @@
       </div>
     </div>
   </section>
+
   <button
     type="button"
     class="scroll-top-button"
@@ -500,6 +568,16 @@
   >
     ↑
   </button>
+
+  <button
+  type="button"
+  class="scroll-bottom-button"
+  *ngIf="espectaculoActivo()"
+  aria-label="Ir abajo"
+  (click)="scrollAbajoEntradas()"
+>
+  ↓
+</button>
 </main>
 
 <div class="modal-backdrop" *ngIf="authModalOpen()" (click)="cerrarAuthModal()">
@@ -533,9 +611,9 @@
           ? 'Verificacion 2FA'
           : authMode() === 'registerTwoFactor'
             ? 'Activa el doble factor'
-          : authMode() === 'login'
-            ? 'Bienvenida de nuevo'
-            : 'Crea tu cuenta'
+            : authMode() === 'login'
+              ? 'Bienvenida de nuevo'
+              : 'Crea tu cuenta'
       }}
     </h2>
     <p>
@@ -543,10 +621,10 @@
         authMode() === 'twoFactor'
           ? 'Introduce el codigo de 6 digitos de tu app autenticadora.'
           : authMode() === 'registerTwoFactor'
-          ? 'Escanea el QR y confirma el codigo para proteger tu cuenta desde el primer inicio.'
-          : authMode() === 'login'
-          ? 'Accede para continuar con tus reservas y compras.'
-          : 'Usa un correo valido y una contrasena robusta para comprar entradas.'
+            ? 'Escanea el QR y confirma el codigo para proteger tu cuenta desde el primer inicio.'
+            : authMode() === 'login'
+              ? 'Accede para continuar con tus reservas y compras.'
+              : 'Usa un correo valido y una contrasena robusta para comprar entradas.'
       }}
     </p>
 
@@ -728,10 +806,10 @@
             : authMode() === 'twoFactor'
               ? 'Verificar codigo'
               : authMode() === 'registerTwoFactor'
-              ? 'Activar y entrar'
-              : authMode() === 'login'
-              ? 'Entrar'
-              : 'Crear cuenta segura'
+                ? 'Activar y entrar'
+                : authMode() === 'login'
+                  ? 'Entrar'
+                  : 'Crear cuenta segura'
         }}
       </button>
     </form>

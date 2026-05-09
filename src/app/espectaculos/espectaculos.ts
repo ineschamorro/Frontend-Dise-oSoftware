@@ -49,6 +49,16 @@ interface TwoFactorSetupResponse {
     secretKey: string;
 }
 
+interface EntradaSeleccionadaCompra {
+    entradaId: number;
+    descripcion: string;
+    precio: number;
+    espectaculoId: number;
+    artista: string;
+    escenario: string;
+    fecha: string;
+}
+
 @Component({
   selector: 'app-espectaculos',
   imports: [CommonModule, FormsModule, PasswordRulesComponent],
@@ -125,7 +135,8 @@ export class Espectaculos implements OnInit, OnDestroy {
     entradasDisponibles = signal<EntradaDisponible[]>([]);
     entradasLoading = signal(false);
     entradasError = signal('');
-    entradasSeleccionadasCompra = signal<number[]>([]);
+    entradasSeleccionadasCompra = signal<EntradaSeleccionadaCompra[]>([]);
+    entradasReservadasCompra = signal<EntradaSeleccionadaCompra[]>([]);
     entradaOrden = signal<'default' | 'priceAsc' | 'visibility'>('default');
     exploraOrden = signal<
     'default'
@@ -141,6 +152,7 @@ export class Espectaculos implements OnInit, OnDestroy {
     filtroFila = signal('');
     filtroButaca = signal('');
     reservaActual = signal<ReservaResponse | null>(null);
+    reservaOwnerKey = signal('');
     paymentIntent = signal<PaymentIntentResponse | null>(null);
     resultadoPago = signal<PaymentResult | null>(null);
     reservandoCompra = signal(false);
@@ -153,6 +165,11 @@ export class Espectaculos implements OnInit, OnDestroy {
     queueAccessToken = signal('');
     colaTurnoSeconds = signal(0);
     passwordValid = computed(() => this.passwordValidation.isValid(this.passwordValidationInput()));
+    numeroEspectaculosSeleccionados = computed(() => new Set(this.entradasSeleccionadasCompra().map((entrada) => entrada.espectaculoId)).size);
+    numeroEspectaculosReservados = computed(() => new Set(this.entradasReservadasCompra().map((entrada) => entrada.espectaculoId)).size);
+    nombresEntradasReserva = computed(() => this.entradasReservadasCompra()
+        .map((entrada) => `${entrada.artista}: ${entrada.descripcion}`)
+        .join(', '));
     accountTicketsFiltered = computed(() => {
         const now = Date.now();
         return this.accountTickets()
@@ -428,6 +445,7 @@ export class Espectaculos implements OnInit, OnDestroy {
     }
 
     private clearLocalAccountState(){
+        this.limpiarReservaLocalSinCancelar();
         this.isLoggedIn.set(false);
         this.userDisplayName.set('');
         this.accountPanelOpen.set(false);
@@ -451,6 +469,7 @@ export class Espectaculos implements OnInit, OnDestroy {
                 this.userDisplayName.set(user.nombre || user.username || this.formatDisplayName(user.email || ''));
                 this.authEmail.set(user.email || this.authEmail());
                 this.setProfileForm(user);
+                this.descartarReservaSiNoEsDeLaCuentaActual();
                 this.loadAccountTickets();
             },
             error: () => {
@@ -593,6 +612,7 @@ export class Espectaculos implements OnInit, OnDestroy {
     }
 
     buscarDesdeBarra(){
+        this.pausarPagoSinCancelarReserva();
         this.searchTouched.set(true);
         this.searchFocused.set(false);
         this.searchLoading.set(true);
@@ -621,10 +641,10 @@ export class Espectaculos implements OnInit, OnDestroy {
     }
 
     verEntradas(espectaculo: EspectaculoResultado){
+        this.pausarPagoSinCancelarReserva();
         this.searchTouched.set(true);
         this.searchLoading.set(false);
         this.searchError.set('');
-        this.resetCompraState();
         this.clearColaTimer();
         this.clearColaTurnoTimer();
         this.colaEstado.set(null);
@@ -757,9 +777,11 @@ export class Espectaculos implements OnInit, OnDestroy {
         }
         this.clearColaTurnoTimer();
         this.entradasDisponibles.set([]);
-        this.entradasSeleccionadasCompra.set([]);
+        this.quitarSeleccionDelEspectaculoActivo();
         this.queueAccessToken.set('');
-        this.resetCompraState();
+        if (!this.reservaActual() && !this.paymentIntent()) {
+            this.resetCompraState(true, false);
+        }
     }
 
     private async salirDeColaActual() {
@@ -790,7 +812,7 @@ export class Espectaculos implements OnInit, OnDestroy {
             if (next <= 0) {
                 this.clearColaTurnoTimer();
                 this.entradasDisponibles.set([]);
-                this.entradasSeleccionadasCompra.set([]);
+                this.quitarSeleccionDelEspectaculoActivo();
                 this.queueAccessToken.set('');
                 this.entradasError.set('Tu turno de la cola virtual ha caducado. Vuelve a entrar en la cola para seleccionar entradas.');
             }
@@ -806,6 +828,7 @@ export class Espectaculos implements OnInit, OnDestroy {
     }
 
     abrirEspectaculoExplora(espectaculo: EspectaculoResultado){
+        this.pausarPagoSinCancelarReserva();
         const artista = this.baseArtistName(espectaculo.artista);
         const artistaKey = this.baseArtistKey(espectaculo.artista);
         this.searchTerm.set(artista);
@@ -858,6 +881,7 @@ export class Espectaculos implements OnInit, OnDestroy {
     }
 
     volverInicio(){
+        this.pausarPagoSinCancelarReserva();
         void this.salirDeColaActual();
         this.clearColaTimer();
         this.clearColaTurnoTimer();
@@ -876,7 +900,9 @@ export class Espectaculos implements OnInit, OnDestroy {
         this.entradasDisponibles.set([]);
         this.entradasLoading.set(false);
         this.entradasError.set('');
-        this.resetCompraState();
+        if (!this.reservaActual() && !this.paymentIntent()) {
+            this.resetCompraState(true, false);
+        }
         this.colaEstado.set(null);
         this.colaError.set('');
         this.queueAccessToken.set('');
@@ -884,10 +910,13 @@ export class Espectaculos implements OnInit, OnDestroy {
     }
 
     volverAResultados(){
+        this.pausarPagoSinCancelarReserva();
         void this.salirDeColaActual();
         this.clearColaTimer();
         this.clearColaTurnoTimer();
-        this.resetCompraState();
+        if (!this.reservaActual() && !this.paymentIntent()) {
+            this.resetCompraState(true, false);
+        }
         this.espectaculoActivo.set(null);
         this.entradasDisponibles.set([]);
         this.entradasLoading.set(false);
@@ -955,30 +984,47 @@ export class Espectaculos implements OnInit, OnDestroy {
     }
 
     isEntradaSeleccionada(entradaId: number) {
-        return this.entradasSeleccionadasCompra().includes(entradaId);
+        return this.entradasSeleccionadasCompra().some((entrada) => entrada.entradaId === entradaId);
     }
 
     toggleEntradaCompra(entrada: EntradaDisponible) {
-        if (this.paymentIntent()) {
+        if (this.reservandoCompra() || this.procesandoPago()) {
+            return;
+        }
+
+        const espectaculo = this.espectaculoActivo();
+        if (!espectaculo) {
             return;
         }
 
         const entradaId = entrada.id;
         if (this.isEntradaSeleccionada(entradaId)) {
             this.entradasSeleccionadasCompra.set(
-                this.entradasSeleccionadasCompra().filter((id) => id !== entradaId),
+                this.entradasSeleccionadasCompra().filter((seleccionada) => seleccionada.entradaId !== entradaId),
             );
-            return;
+        } else {
+            this.entradasSeleccionadasCompra.set(this.uniqueEntradasSeleccionadas([
+                ...this.entradasSeleccionadasCompra(),
+                {
+                    entradaId,
+                    descripcion: entrada.descripcion,
+                    precio: entrada.precio,
+                    espectaculoId: espectaculo.id,
+                    artista: espectaculo.artista,
+                    escenario: espectaculo.escenario,
+                    fecha: espectaculo.fecha,
+                },
+            ]));
         }
 
-        this.entradasSeleccionadasCompra.set([...this.entradasSeleccionadasCompra(), entradaId]);
+        if (this.paymentIntent()) {
+            this.unmountPaymentElement();
+            this.paymentIntent.set(null);
+        }
     }
 
     totalSeleccionado() {
-        const seleccion = new Set(this.entradasSeleccionadasCompra());
-
-        return this.entradasDisponibles()
-            .filter((entrada) => seleccion.has(entrada.id))
+        return this.entradasSeleccionadasCompra()
             .reduce((total, entrada) => total + entrada.precio, 0);
     }
 
@@ -1007,13 +1053,18 @@ export class Espectaculos implements OnInit, OnDestroy {
     }
 
     async reservarYPagar() {
+        if (this.reservandoCompra() || this.procesandoPago()) {
+            return;
+        }
+
         if (!this.isLoggedIn()) {
             this.compraError.set('Para comprar entradas necesitas iniciar sesion o registrarte.');
             this.abrirAuthModal('login');
             return;
         }
 
-        if (this.entradasSeleccionadasCompra().length === 0) {
+        const seleccion = this.entradasSeleccionadasCompra();
+        if (seleccion.length === 0) {
             this.compraError.set('Selecciona al menos una entrada para continuar.');
             return;
         }
@@ -1022,12 +1073,38 @@ export class Espectaculos implements OnInit, OnDestroy {
         this.resultadoPago.set(null);
         this.reservandoCompra.set(true);
 
+        const reservadasIds = new Set(this.entradasReservadasCompra().map((entrada) => entrada.entradaId));
+        const entradasPendientes = seleccion.filter((entrada) => !reservadasIds.has(entrada.entradaId));
+
         try {
-            const reserva = await firstValueFrom(
-                this.compraService.reservarEntradas(this.entradasSeleccionadasCompra(), this.queueAccessToken()),
-            );
-            this.reservaActual.set(reserva);
-            this.startReservaTimer();
+            const ownerKey = this.currentReservationOwnerKey();
+            let reserva = this.reservaActual();
+
+            if (entradasPendientes.length > 0) {
+                reserva = await firstValueFrom(
+                    this.compraService.reservarEntradas(
+                        entradasPendientes.map((entrada) => entrada.entradaId),
+                        this.queueAccessToken(),
+                    ),
+                );
+
+                this.reservaOwnerKey.set(ownerKey);
+                this.compraService.marcaReservaActiva(ownerKey);
+                this.reservaActual.set(reserva);
+                this.entradasReservadasCompra.set(this.uniqueEntradasSeleccionadas([
+                    ...this.entradasReservadasCompra(),
+                    ...entradasPendientes,
+                ]));
+                this.startReservaTimer();
+            }
+
+            if (!reserva) {
+                this.compraError.set('No hay ninguna reserva activa para pagar.');
+                return;
+            }
+
+            this.unmountPaymentElement();
+            this.paymentIntent.set(null);
 
             const paymentIntent = await firstValueFrom(this.compraService.createPaymentIntent());
             this.paymentIntent.set(paymentIntent);
@@ -1040,16 +1117,14 @@ export class Espectaculos implements OnInit, OnDestroy {
     }
 
     reservarYPagarYScroll(): void {
-    const resultadoReserva = this.reservarYPagar();
-
-    Promise.resolve(resultadoReserva).finally(() => {
-        setTimeout(() => {
-        document.querySelector('.payment-box')?.scrollIntoView({
-            behavior: 'smooth',
-            block: 'start',
+        void this.reservarYPagar().finally(() => {
+            setTimeout(() => {
+                document.querySelector('.payment-box')?.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'start',
+                });
+            }, 150);
         });
-        }, 300);
-    });
     }
 
     scrollArribaEntradas(): void {
@@ -1057,6 +1132,26 @@ export class Espectaculos implements OnInit, OnDestroy {
             behavior: 'smooth',
             block: 'start',
         });
+    }
+
+    scrollAbajoEntradas(): void {
+    const target =
+        document.querySelector('.payment-box') ||
+        document.querySelector('.reserve-status') ||
+        document.querySelector('.seat-grid');
+
+    if (target) {
+        target.scrollIntoView({
+            behavior: 'smooth',
+            block: 'end',
+        });
+        return;
+    }
+
+    window.scrollTo({
+        top: document.documentElement.scrollHeight,
+        behavior: 'smooth',
+    });
     }
 
     async confirmarPago() {
@@ -1087,6 +1182,7 @@ export class Espectaculos implements OnInit, OnDestroy {
                 this.resultadoPago.set(estado);
                 if (estado.status === 'succeeded') {
                     this.savePurchasedTickets();
+                    this.compraService.limpiaReservaActiva(this.reservaOwnerKey() || this.currentReservationOwnerKey());
                     this.resetCompraState(false);
                     await this.recargarEntradasActivas();
                     this.cargarExplora();
@@ -1099,11 +1195,98 @@ export class Espectaculos implements OnInit, OnDestroy {
         }
     }
 
+
+    private pausarPagoSinCancelarReserva() {
+        if (!this.paymentIntent()) {
+            return;
+        }
+
+        this.unmountPaymentElement();
+        this.paymentIntent.set(null);
+        this.resultadoPago.set(null);
+        this.procesandoPago.set(false);
+    }
+
+    private buscarEspectaculoSeleccionado(entrada: EntradaSeleccionadaCompra): EspectaculoResultado | null {
+        return this.espectaculosExplora().find((espectaculo) => espectaculo.id === entrada.espectaculoId)
+            ?? this.resultadosBusqueda().find((espectaculo) => espectaculo.id === entrada.espectaculoId)
+            ?? null;
+    }
+
+    private espectaculoDesdeSeleccion(entrada: EntradaSeleccionadaCompra): EspectaculoResultado {
+        return {
+            id: entrada.espectaculoId,
+            artista: entrada.artista,
+            escenario: entrada.escenario,
+            fecha: entrada.fecha,
+            altaDemanda: false,
+            aperturaTaquilla: undefined,
+        } as EspectaculoResultado;
+    }
+
+    async continuarPagoReservaActiva() {
+        if (!this.reservaActual()) {
+            return;
+        }
+
+        const reservadasIds = new Set(this.entradasReservadasCompra().map((entrada) => entrada.entradaId));
+        const hayEntradasPendientes = this.entradasSeleccionadasCompra().some((entrada) => !reservadasIds.has(entrada.entradaId));
+        if (hayEntradasPendientes) {
+            await this.reservarYPagar();
+            document.querySelector('.payment-box')?.scrollIntoView({
+                behavior: 'smooth',
+                block: 'start',
+            });
+            return;
+        }
+
+        const primeraEntrada = this.entradasReservadasCompra()[0] ?? this.entradasSeleccionadasCompra()[0];
+        if (primeraEntrada && !this.espectaculoActivo()) {
+            const espectaculo = this.buscarEspectaculoSeleccionado(primeraEntrada) ?? this.espectaculoDesdeSeleccion(primeraEntrada);
+            this.searchTouched.set(true);
+            this.searchLoading.set(false);
+            this.searchError.set('');
+            this.espectaculoActivo.set(espectaculo);
+            this.entradasDisponibles.set([]);
+            this.entradasError.set('');
+            this.resetEntradaFilters();
+            this.cargarEntradasConTurno(espectaculo);
+        }
+
+        if (this.paymentIntent()) {
+            await this.mountStripeElement(this.paymentIntent()!);
+            document.querySelector('.payment-box')?.scrollIntoView({
+                behavior: 'smooth',
+                block: 'start',
+            });
+            return;
+        }
+
+        this.compraError.set('');
+        this.reservandoCompra.set(true);
+
+        try {
+            const paymentIntent = await firstValueFrom(this.compraService.createPaymentIntent());
+            this.paymentIntent.set(paymentIntent);
+            await this.mountStripeElement(paymentIntent);
+            document.querySelector('.payment-box')?.scrollIntoView({
+                behavior: 'smooth',
+                block: 'start',
+            });
+        } catch (error) {
+            this.compraError.set(this.getHttpErrorMessage(error));
+        } finally {
+            this.reservandoCompra.set(false);
+        }
+    }
+
     async cancelarReserva(caducada = false) {
         this.compraError.set('');
 
         try {
             await firstValueFrom(this.compraService.cancelarPago());
+            this.compraService.limpiaReservaActiva(this.reservaOwnerKey() || this.currentReservationOwnerKey());
+            this.entradasReservadasCompra.set([]);
             this.resetCompraState();
             await this.recargarEntradasActivas();
             if (caducada) {
@@ -1188,17 +1371,63 @@ export class Espectaculos implements OnInit, OnDestroy {
         this.stripe = null;
     }
 
-    private resetCompraState(clearResultado = true) {
+    private resetCompraState(clearResultado = true, clearSelected = true) {
         this.clearReservaTimer();
         this.unmountPaymentElement();
-        this.entradasSeleccionadasCompra.set([]);
+        if (clearSelected) {
+            this.entradasSeleccionadasCompra.set([]);
+            this.entradasReservadasCompra.set([]);
+        }
         this.reservaActual.set(null);
+        this.reservaOwnerKey.set('');
         this.paymentIntent.set(null);
         if (clearResultado) {
             this.resultadoPago.set(null);
         }
         this.compraError.set('');
         this.reservaSeconds.set(0);
+    }
+
+
+    private uniqueEntradasSeleccionadas(entradas: EntradaSeleccionadaCompra[]) {
+        const map = new Map<number, EntradaSeleccionadaCompra>();
+
+        for (const entrada of entradas) {
+            map.set(entrada.entradaId, entrada);
+        }
+
+        return Array.from(map.values());
+    }
+
+    private currentReservationOwnerKey() {
+        return this.authEmail().trim().toLowerCase() || 'anonymous';
+    }
+
+    private descartarReservaSiNoEsDeLaCuentaActual() {
+        const owner = this.reservaOwnerKey();
+        if (!owner || owner === this.currentReservationOwnerKey()) {
+            return;
+        }
+        this.limpiarReservaLocalSinCancelar();
+        this.compraError.set('Has cambiado de cuenta. La reserva anterior no se muestra en esta sesión.');
+    }
+
+    private limpiarReservaLocalSinCancelar() {
+        const owner = this.reservaOwnerKey();
+        if (owner) {
+            this.compraService.limpiaReservaActiva(owner);
+        }
+        this.resetCompraState();
+    }
+
+    private quitarSeleccionDelEspectaculoActivo() {
+        const espectaculo = this.espectaculoActivo();
+        if (!espectaculo) {
+            return;
+        }
+        this.entradasSeleccionadasCompra.set(
+            this.entradasSeleccionadasCompra().filter((entrada) => entrada.espectaculoId !== espectaculo.id),
+        );
     }
 
     private setProfileForm(user: UserProfile) {
@@ -1243,29 +1472,22 @@ export class Espectaculos implements OnInit, OnDestroy {
     }
 
     private savePurchasedTickets() {
-        const espectaculo = this.espectaculoActivo();
-        if (!espectaculo || this.entradasSeleccionadasCompra().length === 0) {
+        const seleccionadas = this.entradasReservadasCompra().length > 0 ? this.entradasReservadasCompra() : this.entradasSeleccionadasCompra();
+        if (seleccionadas.length === 0) {
             return;
         }
 
-        const selectedIds = new Set(this.entradasSeleccionadasCompra());
         const purchasedAt = new Date().toISOString();
-        const newTickets = this.entradasDisponibles()
-            .filter((entrada) => selectedIds.has(entrada.id))
-            .map((entrada) => ({
-                id: `${entrada.id}-${purchasedAt}`,
-                entradaId: entrada.id,
-                artista: espectaculo.artista,
-                escenario: espectaculo.escenario,
-                fecha: espectaculo.fecha,
-                descripcion: entrada.descripcion,
-                precio: entrada.precio,
-                purchasedAt,
-            }));
-
-        if (newTickets.length === 0) {
-            return;
-        }
+        const newTickets = seleccionadas.map((entrada) => ({
+            id: `${entrada.entradaId}-${purchasedAt}`,
+            entradaId: entrada.entradaId,
+            artista: entrada.artista,
+            escenario: entrada.escenario,
+            fecha: entrada.fecha,
+            descripcion: entrada.descripcion,
+            precio: entrada.precio,
+            purchasedAt,
+        }));
 
         const tickets = [...newTickets, ...this.readAccountTickets()];
         this.accountTickets.set(tickets);
@@ -1750,6 +1972,7 @@ private disponibilidadEventoValue(espectaculo: EspectaculoResultado): number | n
         const displayName = user?.nombre || user?.username || this.getDisplayName();
         this.userDisplayName.set(displayName);
         this.storeAuthSession(displayName, user?.email || this.authEmail().trim());
+        this.descartarReservaSiNoEsDeLaCuentaActual();
         this.authPassword.set('');
         this.authPasswordRepeat.set('');
         this.registerEnableTwoFactor.set(false);
@@ -1765,7 +1988,7 @@ private disponibilidadEventoValue(espectaculo: EspectaculoResultado): number | n
             return;
         }
 
-        const rawSession = localStorage.getItem(Espectaculos.AUTH_STORAGE_KEY);
+        const rawSession = sessionStorage.getItem(Espectaculos.AUTH_STORAGE_KEY);
         if (!rawSession) {
             return;
         }
@@ -1790,7 +2013,7 @@ private disponibilidadEventoValue(espectaculo: EspectaculoResultado): number | n
             return;
         }
 
-        localStorage.setItem(Espectaculos.AUTH_STORAGE_KEY, JSON.stringify({ displayName, email }));
+        sessionStorage.setItem(Espectaculos.AUTH_STORAGE_KEY, JSON.stringify({ displayName, email }));
     }
 
     private clearStoredAuthSession(){
@@ -1798,7 +2021,7 @@ private disponibilidadEventoValue(espectaculo: EspectaculoResultado): number | n
             return;
         }
 
-        localStorage.removeItem(Espectaculos.AUTH_STORAGE_KEY);
+        sessionStorage.removeItem(Espectaculos.AUTH_STORAGE_KEY);
     }
 
     private isBrowser(){
@@ -1909,17 +2132,5 @@ getNumeroDeEntradas(espectaculo: any){
     irAComprarEntradas(espectaculo: any){
         this.router.navigate(['/comprar', espectaculo.id]);
     }
-/*
-    getEntradasLibres(espectaculo: any){
-		this.espectaculoService.getEntradasLibres(espectaculo).subscribe(
-            (response: any) => {
-                espectaculo.entradasLibres = response;
-            },
-            (error: any) => {
-                console.error('Error', error);
-                this.cargandoEntradas.set(false);
-            }
-        );
-	}
-*/
+
 }
