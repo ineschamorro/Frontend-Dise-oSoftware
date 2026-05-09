@@ -914,7 +914,7 @@ h1 {
   justify-content: center;
   padding: 1.2rem;
   position: fixed;
-  z-index: 20;
+  z-index: 70;
 }
 
 .auth-modal {
@@ -992,6 +992,51 @@ h1 {
 .auth-modal p {
   color: #6b7280;
   line-height: 1.55;
+}
+
+.confirm-modal {
+  background: #ffffff;
+  border-radius: 1rem;
+  box-shadow: 0 34px 90px rgba(17, 24, 39, 0.35);
+  max-width: 440px;
+  padding: 1.35rem;
+  width: 100%;
+}
+
+.confirm-modal h2 {
+  color: #111827;
+  font-size: 1.45rem;
+  margin-bottom: 0.7rem;
+}
+
+.confirm-modal p {
+  color: #4b5563;
+  line-height: 1.55;
+}
+
+.confirm-actions {
+  display: flex;
+  gap: 0.8rem;
+  justify-content: flex-end;
+  margin-top: 1.25rem;
+}
+
+.confirm-cancel-button,
+.confirm-delete-button {
+  border-radius: 0.8rem;
+  font-weight: 900;
+  padding: 0.85rem 1rem;
+}
+
+.confirm-cancel-button {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  color: #374151;
+}
+
+.confirm-delete-button {
+  background: #991b1b;
+  color: #ffffff;
 }
 
 .auth-form {
@@ -1357,6 +1402,40 @@ h1 {
   top: 0.36rem;
   transform: rotate(45deg);
   width: 0.38rem;
+}
+
+.danger-section {
+  border-bottom: 0;
+}
+
+.delete-account-row {
+  color: #991b1b;
+}
+
+.delete-mini {
+  border: 2px solid currentColor;
+  border-radius: 0.2rem;
+}
+
+.delete-mini::before {
+  background: currentColor;
+  content: "";
+  height: 2px;
+  left: 0.12rem;
+  position: absolute;
+  top: -0.28rem;
+  width: 1.1rem;
+}
+
+.delete-mini::after {
+  background: currentColor;
+  box-shadow: 0.28rem 0 0 currentColor, 0.56rem 0 0 currentColor;
+  content: "";
+  height: 0.75rem;
+  left: 0.22rem;
+  position: absolute;
+  top: 0.28rem;
+  width: 2px;
 }
 
 .account-chevron {

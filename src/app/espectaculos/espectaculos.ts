@@ -78,6 +78,9 @@ export class Espectaculos implements OnInit, OnDestroy {
     authMessage = signal('');
     authError = signal('');
     authSubmitting = signal(false);
+    accountDeleting = signal(false);
+    accountDeleteError = signal('');
+    accountDeleteConfirmOpen = signal(false);
     twoFactorCode = signal('');
     twoFactorChallengeToken = signal('');
     entradasOpen = signal(true);
@@ -387,6 +390,44 @@ export class Espectaculos implements OnInit, OnDestroy {
             next: () => {},
             error: () => {},
         });
+        this.clearLocalAccountState();
+    }
+
+    solicitarEliminarCuenta(){
+        if (this.accountDeleting()) {
+            return;
+        }
+        this.accountDeleteError.set('');
+        this.accountDeleteConfirmOpen.set(true);
+    }
+
+    cancelarEliminarCuenta(){
+        if (this.accountDeleting()) {
+            return;
+        }
+        this.accountDeleteConfirmOpen.set(false);
+    }
+
+    eliminarCuenta(){
+        if (this.accountDeleting()) {
+            return;
+        }
+        this.accountDeleteConfirmOpen.set(false);
+        this.accountDeleting.set(true);
+        this.accountDeleteError.set('');
+        this.http.delete(`${USER_API_BASE_URL}/users/me`, { withCredentials: true }).subscribe({
+            next: () => {
+                this.accountDeleting.set(false);
+                this.clearLocalAccountState();
+            },
+            error: () => {
+                this.accountDeleting.set(false);
+                this.accountDeleteError.set('No se ha podido eliminar la cuenta. Vuelve a iniciar sesion e intentalo de nuevo.');
+            },
+        });
+    }
+
+    private clearLocalAccountState(){
         this.isLoggedIn.set(false);
         this.userDisplayName.set('');
         this.accountPanelOpen.set(false);
@@ -396,6 +437,8 @@ export class Espectaculos implements OnInit, OnDestroy {
         this.clearStoredAuthSession();
         this.accountTickets.set([]);
         this.clearProfileForm();
+        this.accountDeleteError.set('');
+        this.accountDeleteConfirmOpen.set(false);
     }
 
     private cargarSesion(){

@@ -929,5 +929,37 @@
         <strong>Cerrar sesion</strong>
       </button>
     </section>
+
+    <section class="account-section danger-section">
+      <button type="button" class="account-row logout-row delete-account-row" [disabled]="accountDeleting()" (click)="solicitarEliminarCuenta()">
+        <span class="account-icon delete-mini" aria-hidden="true"></span>
+        <strong>{{ accountDeleting() ? 'Eliminando cuenta...' : 'Eliminar cuenta' }}</strong>
+      </button>
+      <p class="auth-error" *ngIf="accountDeleteError()">{{ accountDeleteError() }}</p>
+    </section>
   </aside>
+</div>
+
+<div class="modal-backdrop" *ngIf="accountDeleteConfirmOpen()" (click)="cancelarEliminarCuenta()">
+  <section
+    class="confirm-modal"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="delete-account-title"
+    (click)="$event.stopPropagation()"
+  >
+    <h2 id="delete-account-title">Eliminar cuenta</h2>
+    <p>
+      Esta accion eliminara tu cuenta de forma permanente. Las entradas ya compradas no volveran a estar disponibles.
+      ¿Quieres continuar?
+    </p>
+    <div class="confirm-actions">
+      <button type="button" class="confirm-cancel-button" [disabled]="accountDeleting()" (click)="cancelarEliminarCuenta()">
+        Cancelar
+      </button>
+      <button type="button" class="confirm-delete-button" [disabled]="accountDeleting()" (click)="eliminarCuenta()">
+        {{ accountDeleting() ? 'Eliminando...' : 'Eliminar cuenta' }}
+      </button>
+    </div>
+  </section>
 </div>
