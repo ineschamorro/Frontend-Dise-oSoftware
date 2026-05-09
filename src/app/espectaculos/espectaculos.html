@@ -594,7 +594,7 @@
 
     <div class="auth-tabs" aria-label="Tipo de acceso" *ngIf="authMode() !== 'twoFactor' && authMode() !== 'registerTwoFactor'">
       <button type="button" [class.active]="authMode() === 'login'" (click)="authMode.set('login')">
-        Iniciar sesion
+        Iniciar sesión
       </button>
       <button
         type="button"
@@ -608,7 +608,7 @@
     <h2 id="auth-title">
       {{
         authMode() === 'twoFactor'
-          ? 'Verificacion 2FA'
+          ? 'Verificación 2FA'
           : authMode() === 'registerTwoFactor'
             ? 'Activa el doble factor'
             : authMode() === 'login'
@@ -619,12 +619,12 @@
     <p>
       {{
         authMode() === 'twoFactor'
-          ? 'Introduce el codigo de 6 digitos de tu app autenticadora.'
+          ? 'Introduce el código de 6 dígitos de tu app autenticadora.'
           : authMode() === 'registerTwoFactor'
-            ? 'Escanea el QR y confirma el codigo para proteger tu cuenta desde el primer inicio.'
+            ? 'Escanea el QR y confirma el código para proteger tu cuenta desde el primer inicio.'
             : authMode() === 'login'
               ? 'Accede para continuar con tus reservas y compras.'
-              : 'Usa un correo valido y una contrasena robusta para comprar entradas.'
+              : 'Usa un correo válido y una contraseña robusta para comprar entradas.'
       }}
     </p>
 
@@ -680,7 +680,7 @@
       </div>
 
       <label *ngIf="authMode() !== 'twoFactor' && authMode() !== 'registerTwoFactor'">
-        Correo electronico
+        Correo electrónico
         <input
           type="email"
           name="email"
@@ -714,7 +714,7 @@
       </label>
 
       <label *ngIf="authMode() === 'twoFactor'">
-        Codigo 2FA
+        Código 2FA
         <input
           type="text"
           inputmode="numeric"
@@ -774,10 +774,10 @@
       <div class="auth-two-factor-setup" *ngIf="authMode() === 'registerTwoFactor'">
         <div class="auth-qr-loading" *ngIf="twoFactorSetupLoading()">Preparando QR...</div>
         <ng-container *ngIf="twoFactorSetupOpen()">
-          <img [src]="twoFactorQrUrl()" alt="Codigo QR para configurar 2FA" />
+          <img [src]="twoFactorQrUrl()" alt="Código QR para configurar 2FA" />
           <p>Escanea el QR con tu app autenticadora.</p>
           <label>
-            Codigo de la app
+            Código de la app
             <input
               type="text"
               inputmode="numeric"
@@ -804,7 +804,7 @@
           authSubmitting()
             ? 'Enviando...'
             : authMode() === 'twoFactor'
-              ? 'Verificar codigo'
+              ? 'Verificar código'
               : authMode() === 'registerTwoFactor'
                 ? 'Activar y entrar'
                 : authMode() === 'login'
@@ -975,7 +975,7 @@
             <input type="text" maxlength="120" [ngModel]="profileApellidos()" name="profileApellidos" (ngModelChange)="profileApellidos.set($event)" />
           </label>
           <label>
-            Correo electronico
+            Correo electrónico
             <input type="email" maxlength="180" [ngModel]="profileEmail()" name="profileEmail" (ngModelChange)="profileEmail.set($event)" />
           </label>
           <label>
@@ -1004,7 +1004,7 @@
     <section class="account-section">
       <button type="button" class="account-row logout-row" (click)="cerrarSesion()">
         <span class="account-icon logout-mini" aria-hidden="true"></span>
-        <strong>Cerrar sesion</strong>
+        <strong>Cerrar sesión</strong>
       </button>
     </section>
 
@@ -1028,8 +1028,8 @@
   >
     <h2 id="delete-account-title">Eliminar cuenta</h2>
     <p>
-      Esta accion eliminara tu cuenta de forma permanente. Las entradas ya compradas no volveran a estar disponibles.
-      ¿Quieres continuar?
+      Esta acción eliminará tu cuenta de forma permanente. Las entradas ya compradas no volverán a estar disponibles.
+      ¿Quiéres continuar?
     </p>
     <div class="confirm-actions">
       <button type="button" class="confirm-cancel-button" [disabled]="accountDeleting()" (click)="cancelarEliminarCuenta()">

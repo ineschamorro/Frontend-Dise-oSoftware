@@ -439,7 +439,7 @@ export class Espectaculos implements OnInit, OnDestroy {
             },
             error: () => {
                 this.accountDeleting.set(false);
-                this.accountDeleteError.set('No se ha podido eliminar la cuenta. Vuelve a iniciar sesion e intentalo de nuevo.');
+                this.accountDeleteError.set('No se ha podido eliminar la cuenta. Vuelve a iniciar sesión e intentalo de nuevo.');
             },
         });
     }
@@ -551,7 +551,7 @@ export class Espectaculos implements OnInit, OnDestroy {
             },
             error: () => {
                 this.twoFactorSetupLoading.set(false);
-                this.twoFactorError.set('No se ha podido iniciar la configuracion 2FA.');
+                this.twoFactorError.set('No se ha podido iniciar la configuración 2FA.');
             },
         });
     }
@@ -559,7 +559,7 @@ export class Espectaculos implements OnInit, OnDestroy {
     confirmTwoFactorSetup() {
         const code = this.twoFactorSetupCode().trim();
         if (!/^\d{6}$/.test(code)) {
-            this.twoFactorError.set('Introduce un codigo de 6 digitos.');
+            this.twoFactorError.set('Introduce un código de 6 dígitos.');
             return;
         }
 
@@ -583,7 +583,7 @@ export class Espectaculos implements OnInit, OnDestroy {
             },
             error: () => {
                 this.twoFactorSetupLoading.set(false);
-                this.twoFactorError.set('Codigo 2FA invalido. Revisa la app autenticadora.');
+                this.twoFactorError.set('Código 2FA inválido. Revisa la app autenticadora.');
             },
         });
     }
@@ -1058,7 +1058,7 @@ export class Espectaculos implements OnInit, OnDestroy {
         }
 
         if (!this.isLoggedIn()) {
-            this.compraError.set('Para comprar entradas necesitas iniciar sesion o registrarte.');
+            this.compraError.set('Para comprar entradas necesitas iniciar sesión o registrarte.');
             this.abrirAuthModal('login');
             return;
         }
@@ -1828,7 +1828,7 @@ private disponibilidadEventoValue(espectaculo: EspectaculoResultado): number | n
                         this.twoFactorChallengeToken.set(response.twoFactorChallengeToken || '');
                         this.authMode.set('twoFactor');
                         this.authPassword.set('');
-                        this.authMessage.set('Introduce el codigo de tu app autenticadora.');
+                        this.authMessage.set('Introduce el código de tu app autenticadora.');
                         return;
                     }
                     this.completeLogin(response.user);
@@ -1898,7 +1898,7 @@ private disponibilidadEventoValue(espectaculo: EspectaculoResultado): number | n
     private confirmRegisterTwoFactorSetup() {
         const code = this.twoFactorSetupCode().trim();
         if (!/^\d{6}$/.test(code)) {
-            this.authError.set('Introduce un codigo de 6 digitos.');
+            this.authError.set('Introduce un código de 6 dígitos.');
             return;
         }
 
@@ -1916,7 +1916,7 @@ private disponibilidadEventoValue(espectaculo: EspectaculoResultado): number | n
             },
             error: () => {
                 this.authSubmitting.set(false);
-                this.authError.set('Codigo 2FA invalido. Revisa la app autenticadora.');
+                this.authError.set('Código 2FA inválido. Revisa la app autenticadora.');
             },
         });
     }
@@ -1924,7 +1924,7 @@ private disponibilidadEventoValue(espectaculo: EspectaculoResultado): number | n
     private submitTwoFactorLogin() {
         const code = this.twoFactorCode().trim();
         if (!this.twoFactorChallengeToken() || !/^\d{6}$/.test(code)) {
-            this.authError.set('Introduce un codigo de 6 digitos.');
+            this.authError.set('Introduce un código de 6 dígitos.');
             return;
         }
 
@@ -1945,7 +1945,7 @@ private disponibilidadEventoValue(espectaculo: EspectaculoResultado): number | n
             },
             error: () => {
                 this.authSubmitting.set(false);
-                this.authError.set('Codigo 2FA invalido o caducado.');
+                this.authError.set('Código 2FA inválido o caducado.');
                 this.authMessage.set('');
             },
         });

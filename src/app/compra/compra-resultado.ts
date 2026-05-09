@@ -22,7 +22,7 @@ export class CompraResultadoComponent implements OnInit {
   async ngOnInit() {
     const paymentIntentId = this.route.snapshot.queryParamMap.get('payment_intent');
     if (!paymentIntentId) {
-      this.error.set('No se ha recibido un identificador de pago valido.');
+      this.error.set('No se ha recibido un identificador de pago válido.');
       this.cargando.set(false);
       return;
     }

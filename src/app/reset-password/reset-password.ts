@@ -48,7 +48,7 @@ export class ResetPasswordComponent implements OnInit {
     if (!token) {
       this.validating.set(false);
       this.validToken.set(false);
-      this.error.set('El enlace no es valido o ha caducado.');
+      this.error.set('El enlace no es válido o ha caducado.');
       return;
     }
 
@@ -60,13 +60,13 @@ export class ResetPasswordComponent implements OnInit {
         this.validToken.set(response.valid);
         this.validating.set(false);
         if (!response.valid) {
-          this.error.set('El enlace no es valido o ha caducado.');
+          this.error.set('El enlace no es válido o ha caducado.');
         }
       },
       error: () => {
         this.validToken.set(false);
         this.validating.set(false);
-        this.error.set('El enlace no es valido o ha caducado.');
+        this.error.set('El enlace no es válido o ha caducado.');
       },
     });
   }
