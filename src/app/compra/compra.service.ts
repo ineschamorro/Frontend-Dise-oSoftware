@@ -39,17 +39,17 @@ export class CompraService {
     return this.http.post<PaymentIntentResponse>(
       `${API_BASE_URL}/pagos/payment-intent`,
       {},
-      { withCredentials: true },
+      { withCredentials: true, headers: this.queueHeaders() },
     );
   }
 
   confirmarPago(paymentIntentId: string) {
     const params = new HttpParams().set('paymentIntentId', paymentIntentId);
-    return this.http.post<PaymentResult>(`${API_BASE_URL}/pagos/confirmar`, {}, { params, withCredentials: true });
+    return this.http.post<PaymentResult>(`${API_BASE_URL}/pagos/confirmar`, {}, { params, withCredentials: true, headers: this.queueHeaders() });
   }
 
   cancelarPago() {
-    return this.http.post<void>(`${API_BASE_URL}/pagos/cancelar`, {}, { withCredentials: true });
+    return this.http.post<void>(`${API_BASE_URL}/pagos/cancelar`, {}, { withCredentials: true, headers: this.queueHeaders() });
   }
 
   marcaReservaActiva() {
@@ -77,7 +77,7 @@ export class CompraService {
 
   cancelarPagoEnUnload() {
     // Usar sendBeacon para cancelar de forma confiable en beforeunload
-    const url = `${API_BASE_URL}/pagos/cancelar`;
+    const url = `${API_BASE_URL}/pagos/cancelar?clientId=${encodeURIComponent(this.queueClientId())}`;
     try {
       navigator.sendBeacon(url, JSON.stringify({}));
       console.log('✓ Enviado beacon para cancelar pago');

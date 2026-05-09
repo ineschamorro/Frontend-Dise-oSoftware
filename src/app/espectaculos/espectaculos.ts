@@ -59,6 +59,7 @@ export class Espectaculos implements OnInit, OnDestroy {
     @ViewChild('paymentElementHost') paymentElementHost?: ElementRef<HTMLDivElement>;
     private static readonly AUTH_STORAGE_KEY = 'esi.auth.session';
     private static readonly TICKETS_STORAGE_PREFIX = 'esi.account.tickets:';
+    private static readonly PAGE_STATE_KEY = 'esi.espectaculos.page-state.v1';
 
     authModalOpen = signal(false);
     accountPanelOpen = signal(false);
@@ -272,6 +273,7 @@ export class Espectaculos implements OnInit, OnDestroy {
     private reservaTimerId: ReturnType<typeof setInterval> | null = null;
     private colaTimerId: ReturnType<typeof setInterval> | null = null;
     private colaTurnoTimerId: ReturnType<typeof setInterval> | null = null;
+    private soldOutRedirectTimerId: ReturnType<typeof setTimeout> | null = null;
     private stripe: any = null;
     private elements: any = null;
     private paymentElement: any = null;
@@ -280,13 +282,17 @@ export class Espectaculos implements OnInit, OnDestroy {
         this.restoreAuthSession();
         this.loadAccountTickets();
         this.cargarSesion();
-        this.cargarExplora();
+        const restored = this.restorePageState();
+        if (!restored) {
+            this.cargarExplora();
+        }
     }
 
     ngOnDestroy(){
         this.clearReservaTimer();
         this.clearColaTimer();
         this.clearColaTurnoTimer();
+        this.clearSoldOutRedirectTimer();
         this.unmountPaymentElement();
     }
 
@@ -606,11 +612,13 @@ export class Espectaculos implements OnInit, OnDestroy {
         this.espectaculoActivo.set(null);
         this.entradasDisponibles.set([]);
         this.entradasError.set('');
+        this.persistPageState();
 
         this.espectaculoService.buscarEspectaculos(this.searchTerm()).subscribe({
             next: (resultados) => {
                 this.resultadosBusqueda.set(this.filtrarPorFecha(resultados));
                 this.searchLoading.set(false);
+                this.persistPageState();
             },
             error: () => {
                 this.resultadosBusqueda.set([]);
@@ -633,6 +641,7 @@ export class Espectaculos implements OnInit, OnDestroy {
         this.espectaculoActivo.set(espectaculo);
         this.entradasDisponibles.set([]);
         this.entradasError.set('');
+        this.persistPageState();
 
         if (espectaculo.altaDemanda) {
             this.entradasLoading.set(false);
@@ -647,6 +656,7 @@ export class Espectaculos implements OnInit, OnDestroy {
                 aperturaTaquilla: espectaculo.aperturaTaquilla,
                 message: 'Este espectaculo requiere cola virtual.',
             });
+            void this.refrescarColaActual(espectaculo);
             return;
         }
 
@@ -665,7 +675,7 @@ export class Espectaculos implements OnInit, OnDestroy {
         if (!value) {
             return 'fecha no configurada';
         }
-        const date = new Date(value);
+        const date = this.parseLocalDateTime(value);
         if (Number.isNaN(date.getTime())) {
             return value;
         }
@@ -695,8 +705,25 @@ export class Espectaculos implements OnInit, OnDestroy {
         if (!espectaculo.aperturaTaquilla) {
             return true;
         }
-        const apertura = new Date(espectaculo.aperturaTaquilla);
+        const apertura = this.parseLocalDateTime(espectaculo.aperturaTaquilla);
         return Number.isNaN(apertura.getTime()) || apertura.getTime() <= Date.now();
+    }
+
+    private parseLocalDateTime(value: string) {
+        const match = value.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?/);
+        if (!match) {
+            return new Date(value);
+        }
+
+        const [, year, month, day, hour, minute, second = '0'] = match;
+        return new Date(
+            Number(year),
+            Number(month) - 1,
+            Number(day),
+            Number(hour),
+            Number(minute),
+            Number(second),
+        );
     }
 
     private cargarEntradasConTurno(espectaculo: EspectaculoResultado) {
@@ -721,8 +748,34 @@ export class Espectaculos implements OnInit, OnDestroy {
             const estado = await firstValueFrom(this.espectaculoService.entrarEnCola(espectaculo.id));
             this.actualizarEstadoCola(estado);
             this.startColaPolling(espectaculo);
+            this.persistPageState();
         } catch (error) {
             this.colaError.set(this.getHttpErrorMessage(error));
+        } finally {
+            this.colaLoading.set(false);
+        }
+    }
+
+    private async refrescarColaActual(espectaculo: EspectaculoResultado) {
+        this.colaLoading.set(true);
+        try {
+            const estado = await firstValueFrom(this.espectaculoService.estadoCola(espectaculo.id));
+            this.actualizarEstadoCola(estado);
+            if (estado.enCola) {
+                this.startColaPolling(espectaculo);
+            }
+        } catch {
+            this.colaEstado.set({
+                requiereCola: true,
+                taquillaAbierta: this.isTaquillaOpen(espectaculo),
+                enCola: false,
+                turnoActivo: false,
+                posicion: 0,
+                personasDelante: 0,
+                segundosTurnoRestantes: 0,
+                aperturaTaquilla: espectaculo.aperturaTaquilla,
+                message: 'Este espectaculo requiere cola virtual.',
+            });
         } finally {
             this.colaLoading.set(false);
         }
@@ -743,9 +796,22 @@ export class Espectaculos implements OnInit, OnDestroy {
 
     private actualizarEstadoCola(estado: ColaEstado) {
         this.colaEstado.set(estado);
+        if (estado.entradasAgotadas) {
+            this.clearColaTimer();
+            this.clearColaTurnoTimer();
+            this.entradasDisponibles.set([]);
+            this.entradasSeleccionadasCompra.set([]);
+            this.queueAccessToken.set('');
+            this.resetCompraState();
+            this.colaError.set(estado.message || 'Las entradas para este espectaculo se han agotado.');
+            this.persistPageState();
+            this.scheduleSoldOutRedirect();
+            return;
+        }
         if (estado.accessToken) {
             this.queueAccessToken.set(estado.accessToken);
         }
+        this.persistPageState();
         if (estado.turnoActivo) {
             this.clearColaTimer();
             this.startColaTurnoTimer(estado.segundosTurnoRestantes);
@@ -760,6 +826,7 @@ export class Espectaculos implements OnInit, OnDestroy {
         this.entradasSeleccionadasCompra.set([]);
         this.queueAccessToken.set('');
         this.resetCompraState();
+        this.persistPageState();
     }
 
     private async salirDeColaActual() {
@@ -805,6 +872,21 @@ export class Espectaculos implements OnInit, OnDestroy {
         this.colaTurnoSeconds.set(0);
     }
 
+    private scheduleSoldOutRedirect() {
+        this.clearSoldOutRedirectTimer();
+        this.soldOutRedirectTimerId = setTimeout(() => {
+            this.volverAResultados();
+            this.colaError.set('Las entradas para este espectaculo se han agotado.');
+        }, 2500);
+    }
+
+    private clearSoldOutRedirectTimer() {
+        if (this.soldOutRedirectTimerId) {
+            clearTimeout(this.soldOutRedirectTimerId);
+            this.soldOutRedirectTimerId = null;
+        }
+    }
+
     abrirEspectaculoExplora(espectaculo: EspectaculoResultado){
         const artista = this.baseArtistName(espectaculo.artista);
         const artistaKey = this.baseArtistKey(espectaculo.artista);
@@ -824,6 +906,7 @@ export class Espectaculos implements OnInit, OnDestroy {
         this.resultadosBusqueda.set(
             this.espectaculosExplora().filter((item) => this.baseArtistKey(item.artista) === artistaKey),
         );
+        this.persistPageState();
     }
 
     limpiarFecha(){
@@ -881,6 +964,7 @@ export class Espectaculos implements OnInit, OnDestroy {
         this.colaError.set('');
         this.queueAccessToken.set('');
         this.cargarExplora();
+        this.clearPageState();
     }
 
     volverAResultados(){
@@ -896,6 +980,7 @@ export class Espectaculos implements OnInit, OnDestroy {
         this.colaError.set('');
         this.queueAccessToken.set('');
         this.resetEntradaFilters();
+        this.persistPageState();
     }
 
     seleccionarSugerencia(espectaculo: EspectaculoResultado){
@@ -907,6 +992,7 @@ export class Espectaculos implements OnInit, OnDestroy {
         this.appliedSearchTerm.set(espectaculo.artista);
         this.appliedSearchDate.set(this.searchDate());
         this.resultadosBusqueda.set(this.filtrarPorFecha([espectaculo]));
+        this.persistPageState();
         this.verEntradas(espectaculo);
     }
 
@@ -1087,8 +1173,7 @@ export class Espectaculos implements OnInit, OnDestroy {
                 this.resultadoPago.set(estado);
                 if (estado.status === 'succeeded') {
                     this.savePurchasedTickets();
-                    this.resetCompraState(false);
-                    await this.recargarEntradasActivas();
+                    this.volverAResultados();
                     this.cargarExplora();
                 }
             }
@@ -1540,6 +1625,104 @@ private disponibilidadEventoValue(espectaculo: EspectaculoResultado): number | n
         const value = values.find((item) => typeof item === 'number' && !Number.isNaN(item));
         return value ?? null;
     }
+
+    private persistPageState(){
+        if (!this.isBrowser()) {
+            return;
+        }
+
+        const state = {
+            searchTerm: this.searchTerm(),
+            searchDate: this.searchDate(),
+            searchDateText: this.searchDateText(),
+            resultsDateText: this.resultsDateText(),
+            appliedSearchTerm: this.appliedSearchTerm(),
+            appliedSearchDate: this.appliedSearchDate(),
+            searchTouched: this.searchTouched(),
+            resultadosBusqueda: this.resultadosBusqueda(),
+            espectaculoActivo: this.espectaculoActivo(),
+            queueAccessToken: this.queueAccessToken(),
+        };
+
+        sessionStorage.setItem(Espectaculos.PAGE_STATE_KEY, JSON.stringify(state));
+    }
+
+    private restorePageState(){
+        if (!this.isBrowser()) {
+            return false;
+        }
+
+        const rawState = sessionStorage.getItem(Espectaculos.PAGE_STATE_KEY);
+        if (!rawState) {
+            return false;
+        }
+
+        try {
+            const state = JSON.parse(rawState) as {
+                searchTerm?: string;
+                searchDate?: string;
+                searchDateText?: string;
+                resultsDateText?: string;
+                appliedSearchTerm?: string;
+                appliedSearchDate?: string;
+                searchTouched?: boolean;
+                resultadosBusqueda?: EspectaculoResultado[];
+                espectaculoActivo?: EspectaculoResultado | null;
+                queueAccessToken?: string;
+            };
+
+            this.searchTerm.set(state.searchTerm ?? '');
+            this.searchDate.set(state.searchDate ?? '');
+            this.searchDateText.set(state.searchDateText ?? '');
+            this.resultsDateText.set(state.resultsDateText ?? '');
+            this.appliedSearchTerm.set(state.appliedSearchTerm ?? '');
+            this.appliedSearchDate.set(state.appliedSearchDate ?? '');
+            this.searchTouched.set(!!state.searchTouched);
+            this.resultadosBusqueda.set(state.resultadosBusqueda ?? []);
+            this.queueAccessToken.set(state.queueAccessToken ?? '');
+
+            const espectaculo = state.espectaculoActivo ?? null;
+            if (!espectaculo) {
+                return (state.resultadosBusqueda?.length ?? 0) > 0 || !!state.searchTouched;
+            }
+
+            this.espectaculoActivo.set(espectaculo);
+            this.entradasDisponibles.set([]);
+            this.entradasError.set('');
+            this.searchLoading.set(false);
+
+            if (espectaculo.altaDemanda) {
+                this.colaEstado.set({
+                    requiereCola: true,
+                    taquillaAbierta: this.isTaquillaOpen(espectaculo),
+                    enCola: false,
+                    turnoActivo: false,
+                    posicion: 0,
+                    personasDelante: 0,
+                    segundosTurnoRestantes: 0,
+                    aperturaTaquilla: espectaculo.aperturaTaquilla,
+                    message: 'Consultando tu posicion en la cola virtual.',
+                });
+                void this.refrescarColaActual(espectaculo);
+                return true;
+            }
+
+            this.cargarEntradasConTurno(espectaculo);
+            return true;
+        } catch {
+            this.clearPageState();
+            return false;
+        }
+    }
+
+    private clearPageState(){
+        if (!this.isBrowser()) {
+            return;
+        }
+
+        sessionStorage.removeItem(Espectaculos.PAGE_STATE_KEY);
+    }
+
     private groupByArtist(espectaculos: EspectaculoResultado[]){
         const grouped = new Map<string, EspectaculoResultado>();
 
