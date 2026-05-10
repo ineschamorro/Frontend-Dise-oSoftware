@@ -702,7 +702,7 @@
       </label>
 
       <label *ngIf="authMode() !== 'twoFactor' && authMode() !== 'registerTwoFactor'">
-        <span class="required-label">Contrasena</span>
+        <span class="required-label">Contraseña</span>
         <span class="password-input">
           <input
             [type]="showPassword() ? 'text' : 'password'"
@@ -716,7 +716,7 @@
             type="button"
             class="eye-button"
             [class.visible]="showPassword()"
-            aria-label="Mostrar u ocultar contrasena"
+            aria-label="Mostrar u ocultar contraseña"
             (click)="showPassword.set(!showPassword())"
           >
             <span class="eye-icon" aria-hidden="true"></span>
@@ -739,12 +739,12 @@
       </label>
 
       <label *ngIf="authMode() === 'register'">
-        <span class="required-label">Repetir contrasena</span>
+        <span class="required-label">Repetir contraseña</span>
         <span class="password-input">
           <input
             [type]="showPasswordRepeat() ? 'text' : 'password'"
             name="passwordRepeat"
-            placeholder="Confirma tu contrasena"
+            placeholder="Confirma tu contraseña"
             autocomplete="new-password"
             [ngModel]="authPasswordRepeat()"
             (ngModelChange)="authPasswordRepeat.set($event)"
@@ -753,7 +753,7 @@
             type="button"
             class="eye-button"
             [class.visible]="showPasswordRepeat()"
-            aria-label="Mostrar u ocultar confirmacion de contrasena"
+            aria-label="Mostrar u ocultar confirmacion de contraseña"
             (click)="showPasswordRepeat.set(!showPasswordRepeat())"
           >
             <span class="eye-icon" aria-hidden="true"></span>
@@ -826,7 +826,7 @@
     </form>
 
     <button type="button" class="forgot-button" *ngIf="authMode() === 'login'" (click)="irARecuperarPassword()">
-      He olvidado mi contrasena
+      He olvidado mi contraseña
     </button>
   </section>
 </div>
