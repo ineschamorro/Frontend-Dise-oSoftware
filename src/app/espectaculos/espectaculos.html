@@ -412,6 +412,9 @@
           <p *ngIf="colaEstado()?.turnoActivo">
             Es tu turno. Tienes {{ colaTurnoTiempo() }} para seleccionar entradas antes de perderlo.
           </p>
+          <p class="auth-error" *ngIf="colaEstado()?.entradasAgotadas">
+            {{ colaEstado()?.message || 'Las entradas para este espectaculo se han agotado.' }}
+          </p>
           <p *ngIf="colaEstado() && !colaEstado()?.taquillaAbierta">
             La taquilla abre el {{ formatAperturaTaquilla(colaEstado()?.aperturaTaquilla) }}.
           </p>
@@ -420,17 +423,19 @@
         <button
           type="button"
           class="tickets-button"
-          [disabled]="colaLoading() || !colaEstado()?.taquillaAbierta || colaEstado()?.enCola || colaEstado()?.turnoActivo"
+          [disabled]="colaLoading() || colaEstado()?.entradasAgotadas || !colaEstado()?.taquillaAbierta || colaEstado()?.enCola || colaEstado()?.turnoActivo"
           (click)="entrarEnColaActual()"
         >
           {{
             colaEstado()?.turnoActivo
               ? 'Turno activo'
-              : colaEstado()?.enCola
-                ? 'En cola'
-                : colaEstado()?.taquillaAbierta
-                  ? 'Entrar en la cola'
-                  : 'Cola cerrada'
+              : colaEstado()?.entradasAgotadas
+                ? 'Entradas agotadas'
+                : colaEstado()?.enCola
+                  ? 'En cola'
+                  : colaEstado()?.taquillaAbierta
+                    ? 'Entrar en la cola'
+                    : 'Cola cerrada'
           }}
           <span aria-hidden="true"></span>
         </button>

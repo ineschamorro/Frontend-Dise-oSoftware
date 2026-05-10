@@ -35,5 +35,6 @@ export interface ColaEstado {
   segundosTurnoRestantes: number;
   accessToken?: string;
   aperturaTaquilla?: string;
+  entradasAgotadas?: boolean;
   message: string;
 }

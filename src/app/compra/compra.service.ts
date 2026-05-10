@@ -96,17 +96,12 @@ export class CompraService {
   }
 
   cancelarPagoEnUnload() {
-    const url = `${API_BASE_URL}/pagos/cancelar`;
-
+    const url = `${API_BASE_URL}/pagos/cancelar?clientId=${encodeURIComponent(this.queueClientId())}`;
     try {
       fetch(url, {
         method: 'POST',
         credentials: 'include',
         keepalive: true,
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Queue-Client': this.queueClientId(),
-        },
         body: JSON.stringify({}),
       }).catch(() => {});
     } catch {
