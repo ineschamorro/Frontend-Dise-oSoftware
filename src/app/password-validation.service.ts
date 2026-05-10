@@ -31,7 +31,7 @@ export class PasswordValidationService {
       { id: 'symbol', label: 'Un simbolo', valid: /[^A-Za-z0-9]/.test(password) },
       {
         id: 'match',
-        label: 'Las contrasenas coinciden',
+        label: 'Las contraseñas coinciden',
         valid: password.length > 0 && password === (input.confirmPassword || ''),
       },
       {

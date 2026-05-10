@@ -48,7 +48,7 @@ export class ResetPasswordComponent implements OnInit {
     if (!token) {
       this.validating.set(false);
       this.validToken.set(false);
-      this.error.set('El enlace no es valido o ha caducado.');
+      this.error.set('El enlace no es válido o ha caducado.');
       return;
     }
 
@@ -60,20 +60,20 @@ export class ResetPasswordComponent implements OnInit {
         this.validToken.set(response.valid);
         this.validating.set(false);
         if (!response.valid) {
-          this.error.set('El enlace no es valido o ha caducado.');
+          this.error.set('El enlace no es válido o ha caducado.');
         }
       },
       error: () => {
         this.validToken.set(false);
         this.validating.set(false);
-        this.error.set('El enlace no es valido o ha caducado.');
+        this.error.set('El enlace no es válido o ha caducado.');
       },
     });
   }
 
   submit() {
     if (!this.passwordValid()) {
-      this.error.set('No se pudo establecer la contrasena. Verifique la politica de seguridad.');
+      this.error.set('No se pudo establecer la contraseña. Verifique la política de seguridad.');
       return;
     }
 
@@ -98,7 +98,7 @@ export class ResetPasswordComponent implements OnInit {
         this.loading.set(false);
       },
       error: (error) => {
-        this.error.set(error?.error?.message || 'No se pudo establecer la contrasena. Verifique la politica de seguridad.');
+        this.error.set(error?.error?.message || 'No se pudo establecer la contraseña. Verifique la política de seguridad.');
         this.loading.set(false);
       },
     });

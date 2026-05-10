@@ -22,7 +22,7 @@ export class CompraResultadoComponent implements OnInit {
   async ngOnInit() {
     const paymentIntentId = this.route.snapshot.queryParamMap.get('payment_intent');
     if (!paymentIntentId) {
-      this.error.set('No se ha recibido un identificador de pago valido.');
+      this.error.set('No se ha recibido un identificador de pago válido.');
       this.cargando.set(false);
       return;
     }
@@ -30,6 +30,9 @@ export class CompraResultadoComponent implements OnInit {
     try {
       const resultado = await firstValueFrom(this.compraService.confirmarPago(paymentIntentId));
       this.resultado.set(resultado);
+      if (resultado.status === 'succeeded') {
+        this.compraService.limpiaReservaActiva();
+      }
     } catch (error) {
       this.error.set(this.toMessage(error));
     } finally {
@@ -40,6 +43,7 @@ export class CompraResultadoComponent implements OnInit {
   async liberarReservas() {
     try {
       await firstValueFrom(this.compraService.cancelarPago());
+      this.compraService.limpiaReservaActiva();
       this.resultado.set(null);
       this.error.set('Reservas liberadas. Ya puedes volver a intentarlo.');
     } catch (error) {

@@ -34,7 +34,7 @@ export class ForgotPasswordComponent {
         this.loading.set(false);
       },
       error: () => {
-        this.message.set('Si el correo existe, enviaremos instrucciones para restablecer la contrasena.');
+        this.message.set('Si el correo existe, enviaremos instrucciones para restablecer la contraseña.');
         this.loading.set(false);
       },
     });

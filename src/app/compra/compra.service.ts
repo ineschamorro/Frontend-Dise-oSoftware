@@ -19,19 +19,23 @@ export class CompraService {
   constructor(private http: HttpClient) {}
 
   getEntradasDisponibles(espectaculoId: number, queueAccessToken?: string) {
-    const headers = this.queueHeaders(queueAccessToken);
     return this.http.get<EntradaCompra[]>(
       `${API_BASE_URL}/busqueda/getEntradasDisponibles?espectaculoId=${espectaculoId}`,
-      { withCredentials: true, headers },
+      {
+        withCredentials: true,
+        headers: this.queueHeaders(queueAccessToken),
+      },
     );
   }
 
   reservarEntradas(entradaIds: number[], queueAccessToken?: string) {
-    const headers = this.queueHeaders(queueAccessToken);
     return this.http.put<ReservaResponse>(
       `${API_BASE_URL}/reservas/reservar-lote`,
       { entradaIds },
-      { withCredentials: true, headers },
+      {
+        withCredentials: true,
+        headers: this.queueHeaders(queueAccessToken),
+      },
     );
   }
 
@@ -39,62 +43,69 @@ export class CompraService {
     return this.http.post<PaymentIntentResponse>(
       `${API_BASE_URL}/pagos/payment-intent`,
       {},
-      { withCredentials: true, headers: this.queueHeaders() },
+      {
+        withCredentials: true,
+        headers: this.queueHeaders(),
+      },
     );
   }
 
   confirmarPago(paymentIntentId: string) {
     const params = new HttpParams().set('paymentIntentId', paymentIntentId);
-    return this.http.post<PaymentResult>(`${API_BASE_URL}/pagos/confirmar`, {}, { params, withCredentials: true, headers: this.queueHeaders() });
+
+    return this.http.post<PaymentResult>(
+      `${API_BASE_URL}/pagos/confirmar`,
+      {},
+      {
+        params,
+        withCredentials: true,
+        headers: this.queueHeaders(),
+      },
+    );
   }
 
   cancelarPago() {
-    return this.http.post<void>(`${API_BASE_URL}/pagos/cancelar`, {}, { withCredentials: true, headers: this.queueHeaders() });
+    return this.http.post<void>(
+      `${API_BASE_URL}/pagos/cancelar`,
+      {},
+      {
+        withCredentials: true,
+        headers: this.queueHeaders(),
+      },
+    );
   }
 
-  marcaReservaActiva() {
+  marcaReservaActiva(ownerKey?: string) {
     if (typeof window !== 'undefined') {
-      window.localStorage.setItem(CompraService.ACTIVE_RESERVATION_KEY, 'true');
-      console.log('✓ Reserva marcada como activa');
+      window.sessionStorage.setItem(this.activeReservationKey(ownerKey), 'true');
     }
   }
 
-  limpiaReservaActiva() {
+  limpiaReservaActiva(ownerKey?: string) {
     if (typeof window !== 'undefined') {
-      window.localStorage.removeItem(CompraService.ACTIVE_RESERVATION_KEY);
-      console.log('✓ Reserva limpiada del localStorage');
+      window.sessionStorage.removeItem(this.activeReservationKey(ownerKey));
     }
   }
 
-  tieneReservaActiva(): boolean {
+  tieneReservaActiva(ownerKey?: string): boolean {
     if (typeof window === 'undefined') {
       return false;
     }
-    const activa = window.localStorage.getItem(CompraService.ACTIVE_RESERVATION_KEY) === 'true';
-    console.log('Verificando reserva activa:', activa);
-    return activa;
+
+    return window.sessionStorage.getItem(this.activeReservationKey(ownerKey)) === 'true';
   }
 
   cancelarPagoEnUnload() {
-    // Usar sendBeacon para cancelar de forma confiable en beforeunload
     const url = `${API_BASE_URL}/pagos/cancelar?clientId=${encodeURIComponent(this.queueClientId())}`;
     try {
-      navigator.sendBeacon(url, JSON.stringify({}));
-      console.log('✓ Enviado beacon para cancelar pago');
-    } catch (error) {
-      console.error('Error enviando beacon:', error);
-      // Intentar con fetch como fallback
-      try {
-        fetch(url, {
-          method: 'POST',
-          credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({}),
-          keepalive: true,
-        }).catch(() => {});
-      } catch (e) {
-        console.error('Error en fallback fetch:', e);
-      }
+      fetch(url, {
+        method: 'POST',
+        credentials: 'include',
+        keepalive: true,
+        body: JSON.stringify({}),
+      }).catch(() => {});
+    } catch {
+      // Best effort.
     }
   }
 
@@ -102,22 +113,42 @@ export class CompraService {
     return this.http.post<ColaEstado>(
       `${API_BASE_URL}/colas/join?espectaculoId=${espectaculoId}`,
       {},
-      { withCredentials: true, headers: this.queueHeaders() },
+      {
+        withCredentials: true,
+        headers: this.queueHeaders(),
+      },
     );
   }
 
   estadoCola(espectaculoId: number) {
     return this.http.get<ColaEstado>(
       `${API_BASE_URL}/colas/status?espectaculoId=${espectaculoId}`,
-      { withCredentials: true, headers: this.queueHeaders() },
+      {
+        withCredentials: true,
+        headers: this.queueHeaders(),
+      },
+    );
+  }
+
+  salirDeCola(espectaculoId: number) {
+    return this.http.delete<void>(
+      `${API_BASE_URL}/colas/leave?espectaculoId=${espectaculoId}`,
+      {
+        withCredentials: true,
+        headers: this.queueHeaders(),
+      },
     );
   }
 
   private queueHeaders(queueAccessToken?: string) {
-    let headers = new HttpHeaders({ 'X-Queue-Client': this.queueClientId() });
+    let headers = new HttpHeaders({
+      'X-Queue-Client': this.queueClientId(),
+    });
+
     if (queueAccessToken) {
       headers = headers.set('X-Queue-Access', queueAccessToken);
     }
+
     return headers;
   }
 
@@ -127,12 +158,27 @@ export class CompraService {
     }
 
     const existing = window.sessionStorage.getItem(CompraService.QUEUE_CLIENT_KEY);
+
     if (existing) {
       return existing;
     }
 
-    const generated = window.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const generated =
+      window.crypto?.randomUUID?.() ??
+      `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
     window.sessionStorage.setItem(CompraService.QUEUE_CLIENT_KEY, generated);
+
     return generated;
+  }
+
+  private activeReservationKey(ownerKey?: string) {
+    const owner = ownerKey?.trim();
+
+    if (!owner) {
+      return CompraService.ACTIVE_RESERVATION_KEY;
+    }
+
+    return `${CompraService.ACTIVE_RESERVATION_KEY}:${owner}`;
   }
 }
