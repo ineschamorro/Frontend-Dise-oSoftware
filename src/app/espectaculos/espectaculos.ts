@@ -70,6 +70,7 @@ export class Espectaculos implements OnInit, OnDestroy {
     private static readonly AUTH_STORAGE_KEY = 'esi.auth.session';
     private static readonly TICKETS_STORAGE_PREFIX = 'esi.account.tickets:';
     private static readonly PAGE_STATE_KEY = 'esi.espectaculos.page-state.v1';
+    private static readonly HUMAN_NAME_PATTERN = /^[\p{L}\p{M}]+(?:[ .'-][\p{L}\p{M}]+)*$/u;
 
     authModalOpen = signal(false);
     accountPanelOpen = signal(false);
@@ -277,6 +278,7 @@ export class Espectaculos implements OnInit, OnDestroy {
     cargandoEspectaculos = signal(false);
     cargandoEntradas = signal(false);
     private readonly authGenericError = 'No se ha podido completar la solicitud. Revisa los datos e intentalo de nuevo.';
+    private readonly nameValidationError = 'Nombre y apellidos son obligatorios y solo pueden contener letras, espacios simples, guiones o apostrofes.';
 
 	constructor(
         private espectaculoService: EspectaculosService,
@@ -508,9 +510,15 @@ export class Espectaculos implements OnInit, OnDestroy {
     }
 
     saveProfile() {
-        this.profileSaving.set(true);
         this.profileMessage.set('');
         this.profileError.set('');
+
+        if (!this.areProfileNamesValid()) {
+            this.profileError.set(this.nameValidationError);
+            return;
+        }
+
+        this.profileSaving.set(true);
 
         this.http.put<UserProfile>(`${USER_API_BASE_URL}/users/me`, {
             nombre: this.profileNombre().trim(),
@@ -1975,6 +1983,7 @@ private disponibilidadEventoValue(espectaculo: EspectaculoResultado): number | n
     canRegister(){
         return this.registerNombre().trim().length > 0
             && this.registerApellidos().trim().length > 0
+            && this.areRegisterNamesValid()
             && this.authEmail().trim().length > 0
             && this.authPassword().length > 0
             && this.authPasswordRepeat().length > 0
@@ -1992,6 +2001,11 @@ private disponibilidadEventoValue(espectaculo: EspectaculoResultado): number | n
 
         if (this.authMode() === 'registerTwoFactor') {
             this.confirmRegisterTwoFactorSetup();
+            return;
+        }
+
+        if (this.authMode() === 'register' && !this.areRegisterNamesValid()) {
+            this.authError.set(this.nameValidationError);
             return;
         }
 
@@ -2146,6 +2160,18 @@ private disponibilidadEventoValue(espectaculo: EspectaculoResultado): number | n
             email: this.authEmail(),
             fechaNacimiento: this.registerFechaNacimiento(),
         };
+    }
+
+    private areRegisterNamesValid(){
+        return this.isHumanName(this.registerNombre()) && this.isHumanName(this.registerApellidos());
+    }
+
+    private areProfileNamesValid(){
+        return this.isHumanName(this.profileNombre()) && this.isHumanName(this.profileApellidos());
+    }
+
+    private isHumanName(value: string){
+        return Espectaculos.HUMAN_NAME_PATTERN.test(value.trim());
     }
 
     private completeLogin(user?: UserProfile){

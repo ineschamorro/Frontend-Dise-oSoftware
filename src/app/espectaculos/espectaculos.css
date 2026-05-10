@@ -1059,6 +1059,20 @@ h1 {
   gap: 0.45rem;
 }
 
+.required-label {
+  align-items: baseline;
+  display: inline-flex;
+  gap: 0.25rem;
+}
+
+.required-label::after {
+  color: #dc2626;
+  content: "*";
+  font-size: 0.95em;
+  font-weight: 900;
+  line-height: 1;
+}
+
 .auth-form input {
   background: #f9fafb;
   border: 1px solid #e5e7eb;
