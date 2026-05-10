@@ -443,7 +443,13 @@
 
       <p class="muted-state" *ngIf="entradasLoading()">Cargando entradas disponibles...</p>
       <p class="auth-error" *ngIf="entradasError()">{{ entradasError() }}</p>
-      <p class="muted-state" *ngIf="!entradasLoading() && !entradasError() && entradasDisponibles().length === 0">
+      <p
+        class="muted-state"
+        *ngIf="!entradasLoading()
+          && !entradasError()
+          && entradasDisponibles().length === 0
+          && (!espectaculoActivo()?.altaDemanda || colaEstado()?.turnoActivo)"
+      >
         No quedan entradas disponibles para este espectaculo.
       </p>
 
@@ -636,7 +642,7 @@
     <form class="auth-form" (ngSubmit)="submitAuth()">
       <div class="form-grid" *ngIf="authMode() === 'register'">
         <label>
-          Nombre
+          <span class="required-label">Nombre</span>
           <input
             type="text"
             name="nombre"
@@ -648,7 +654,7 @@
         </label>
 
         <label>
-          Apellidos
+          <span class="required-label">Apellidos</span>
           <input
             type="text"
             name="apellidos"
@@ -685,7 +691,7 @@
       </div>
 
       <label *ngIf="authMode() !== 'twoFactor' && authMode() !== 'registerTwoFactor'">
-        Correo electrónico
+        <span class="required-label">Correo electrónico</span>
         <input
           type="email"
           name="email"
@@ -696,7 +702,7 @@
       </label>
 
       <label *ngIf="authMode() !== 'twoFactor' && authMode() !== 'registerTwoFactor'">
-        Contrasena
+        <span class="required-label">Contrasena</span>
         <span class="password-input">
           <input
             [type]="showPassword() ? 'text' : 'password'"
@@ -719,7 +725,7 @@
       </label>
 
       <label *ngIf="authMode() === 'twoFactor'">
-        Código 2FA
+        <span class="required-label">Código 2FA</span>
         <input
           type="text"
           inputmode="numeric"
@@ -733,7 +739,7 @@
       </label>
 
       <label *ngIf="authMode() === 'register'">
-        Repetir contrasena
+        <span class="required-label">Repetir contrasena</span>
         <span class="password-input">
           <input
             [type]="showPasswordRepeat() ? 'text' : 'password'"
@@ -782,7 +788,7 @@
           <img [src]="twoFactorQrUrl()" alt="Código QR para configurar 2FA" />
           <p>Escanea el QR con tu app autenticadora.</p>
           <label>
-            Código de la app
+            <span class="required-label">Código de la app</span>
             <input
               type="text"
               inputmode="numeric"
@@ -948,7 +954,7 @@
             <p>Escanea el QR o introduce esta clave manualmente:</p>
             <code>{{ twoFactorSecretKey() }}</code>
             <label>
-              Codigo de la app
+              <span class="required-label">Codigo de la app</span>
               <input
                 type="text"
                 inputmode="numeric"
@@ -972,15 +978,15 @@
 
         <form class="profile-form" *ngIf="profileEditing()" (ngSubmit)="saveProfile()">
           <label>
-            Nombre
+            <span class="required-label">Nombre</span>
             <input type="text" maxlength="80" [ngModel]="profileNombre()" name="profileNombre" (ngModelChange)="profileNombre.set($event)" />
           </label>
           <label>
-            Apellidos
+            <span class="required-label">Apellidos</span>
             <input type="text" maxlength="120" [ngModel]="profileApellidos()" name="profileApellidos" (ngModelChange)="profileApellidos.set($event)" />
           </label>
           <label>
-            Correo electrónico
+            <span class="required-label">Correo electrónico</span>
             <input type="email" maxlength="180" [ngModel]="profileEmail()" name="profileEmail" (ngModelChange)="profileEmail.set($event)" />
           </label>
           <label>
