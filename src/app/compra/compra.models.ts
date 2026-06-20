@@ -23,6 +23,17 @@ export interface PaymentResult {
   amount: number;
   currency: string;
   entradasConfirmadas: number;
+  paymentIntentId?: string;
+  purchasedAt?: string;
+  refundableUntil?: string;
+}
+
+export interface RefundResult {
+  status: string;
+  message: string;
+  amount: number;
+  currency: string;
+  entradasDevueltas: number;
 }
 
 export interface ColaEstado {

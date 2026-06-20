@@ -5,6 +5,7 @@ import {
   EntradaCompra,
   PaymentIntentResponse,
   PaymentResult,
+  RefundResult,
   ReservaResponse,
   ColaEstado,
 } from './compra.models';
@@ -55,6 +56,31 @@ export class CompraService {
 
     return this.http.post<PaymentResult>(
       `${API_BASE_URL}/pagos/confirmar`,
+      {},
+      {
+        params,
+        withCredentials: true,
+        headers: this.queueHeaders(),
+      },
+    );
+  }
+
+  pagarConMonedero() {
+    return this.http.post<PaymentResult>(
+      `${API_BASE_URL}/pagos/monedero`,
+      {},
+      {
+        withCredentials: true,
+        headers: this.queueHeaders(),
+      },
+    );
+  }
+
+  devolverCompra(paymentIntentId: string) {
+    const params = new HttpParams().set('paymentIntentId', paymentIntentId);
+
+    return this.http.post<RefundResult>(
+      `${API_BASE_URL}/pagos/devolver`,
       {},
       {
         params,

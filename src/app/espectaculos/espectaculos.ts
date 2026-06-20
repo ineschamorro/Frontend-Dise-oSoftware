@@ -19,12 +19,16 @@ import { PaymentIntentResponse, PaymentResult, ReservaResponse } from '../compra
 interface AccountTicket {
     id: string;
     entradaId: number;
+    paymentIntentId?: string;
     artista: string;
     escenario: string;
     fecha: string;
     descripcion: string;
     precio: number;
     purchasedAt: string;
+    refundableUntil?: string;
+    refunded?: boolean;
+    refundedAt?: string;
 }
 
 interface UserProfile {
@@ -36,6 +40,7 @@ interface UserProfile {
     fechaNacimiento?: string;
     twoFactorEnabled?: boolean;
     rol?: string;
+    walletBalanceCents?: number;
 }
 
 interface LoginResponse {
@@ -98,6 +103,10 @@ export class Espectaculos implements OnInit, OnDestroy {
     entradasOpen = signal(true);
     accountTicketsMode = signal<'upcoming' | 'past'>('upcoming');
     accountTickets = signal<AccountTicket[]>([]);
+    accountTicketsMessage = signal('');
+    accountTicketsError = signal('');
+    refundingPurchaseId = signal('');
+    refundClock = signal(Date.now());
     perfilOpen = signal(false);
     profileEditing = signal(false);
     profileSaving = signal(false);
@@ -110,6 +119,7 @@ export class Espectaculos implements OnInit, OnDestroy {
     profileFechaNacimiento = signal('');
     profileRol = signal('');
     profileTwoFactorEnabled = signal(false);
+    walletBalanceCents = signal(0);
     twoFactorSetupOpen = signal(false);
     twoFactorSetupLoading = signal(false);
     twoFactorQrUrl = signal('');
@@ -176,6 +186,9 @@ export class Espectaculos implements OnInit, OnDestroy {
         const now = Date.now();
         return this.accountTickets()
             .filter((ticket) => {
+                if (ticket.refunded) {
+                    return false;
+                }
                 const eventTime = new Date(ticket.fecha).getTime();
                 const isPast = !Number.isNaN(eventTime) && eventTime < now;
                 return this.accountTicketsMode() === 'past' ? isPast : !isPast;
@@ -292,6 +305,7 @@ export class Espectaculos implements OnInit, OnDestroy {
     private reservaTimerId: ReturnType<typeof setInterval> | null = null;
     private colaTimerId: ReturnType<typeof setInterval> | null = null;
     private colaTurnoTimerId: ReturnType<typeof setInterval> | null = null;
+    private refundTimerId: ReturnType<typeof setInterval> | null = null;
     private soldOutRedirectTimerId: ReturnType<typeof setTimeout> | null = null;
     private stripe: any = null;
     private elements: any = null;
@@ -301,6 +315,7 @@ export class Espectaculos implements OnInit, OnDestroy {
         this.restoreAuthSession();
         this.loadAccountTickets();
         this.cargarSesion();
+        this.startRefundTimer();
         const restored = this.restorePageState();
         if (!restored) {
             this.cargarExplora();
@@ -311,6 +326,7 @@ export class Espectaculos implements OnInit, OnDestroy {
         this.clearReservaTimer();
         this.clearColaTimer();
         this.clearColaTurnoTimer();
+        this.clearRefundTimer();
         this.clearSoldOutRedirectTimer();
         this.unmountPaymentElement();
     }
@@ -720,6 +736,78 @@ export class Espectaculos implements OnInit, OnDestroy {
         this.entradasOpen.set(true);
         this.accountTicketsMode.set(mode);
         this.loadAccountTickets();
+    }
+
+    canRefundTicket(ticket: AccountTicket) {
+        if (!ticket.paymentIntentId || ticket.refunded || !ticket.refundableUntil) {
+            return false;
+        }
+        return new Date(ticket.refundableUntil).getTime() > this.refundClock();
+    }
+
+    refundTimeText(ticket: AccountTicket) {
+        if (!ticket.refundableUntil) {
+            return '';
+        }
+        const remaining = Math.max(0, Math.floor((new Date(ticket.refundableUntil).getTime() - this.refundClock()) / 1000));
+        const minutes = Math.floor(remaining / 60).toString().padStart(2, '0');
+        const seconds = (remaining % 60).toString().padStart(2, '0');
+        return `${minutes}:${seconds}`;
+    }
+
+    private startRefundTimer() {
+        if (!this.isBrowser() || this.refundTimerId) {
+            return;
+        }
+        this.refundTimerId = setInterval(() => {
+            this.refundClock.set(Date.now());
+        }, 1000);
+    }
+
+    private clearRefundTimer() {
+        if (this.refundTimerId) {
+            clearInterval(this.refundTimerId);
+            this.refundTimerId = null;
+        }
+    }
+
+    async devolverCompra(ticket: AccountTicket) {
+        if (!ticket.paymentIntentId || this.refundingPurchaseId()) {
+            return;
+        }
+
+        if (this.isBrowser()) {
+            const amountText = Number.isFinite(ticket.precio) ? `\n\nImporte al monedero: ${this.formatEuros(ticket.precio)}.` : '';
+            const confirmed = window.confirm(
+                `Estas seguro de que quieres devolver esta entrada?\n\nLa entrada volvera a estar disponible y el dinero no se devolvera a la tarjeta: se guardara en tu monedero.${amountText}`,
+            );
+            if (!confirmed) {
+                return;
+            }
+        }
+
+        this.accountTicketsMessage.set('');
+        this.accountTicketsError.set('');
+        this.refundingPurchaseId.set(ticket.paymentIntentId);
+
+        try {
+            const result = await firstValueFrom(this.compraService.devolverCompra(ticket.paymentIntentId));
+            const tickets = this.readAccountTickets()
+                .filter((item) => item.paymentIntentId !== ticket.paymentIntentId);
+            this.accountTickets.set(tickets);
+            this.writeAccountTickets(tickets);
+            this.cargarSesion();
+            this.accountTicketsMessage.set(`${result.message} Importe: ${this.formatEuros(result.amount)}.`);
+            try {
+                await this.recargarEntradasActivas();
+            } catch {
+                // La devolucion ya se ha completado; la disponibilidad se refrescara en la siguiente consulta.
+            }
+        } catch (error) {
+            this.accountTicketsError.set(this.getHttpErrorMessage(error));
+        } finally {
+            this.refundingPurchaseId.set('');
+        }
     }
 
     colaTurnoTiempo() {
@@ -1210,6 +1298,83 @@ export class Espectaculos implements OnInit, OnDestroy {
         }
     }
 
+    async comprarConMonedero() {
+        if (this.reservandoCompra() || this.procesandoPago()) {
+            return;
+        }
+
+        if (!this.isLoggedIn()) {
+            this.compraError.set('Para comprar entradas necesitas iniciar sesion o registrarte.');
+            this.abrirAuthModal('login');
+            return;
+        }
+
+        const seleccion = this.entradasSeleccionadasCompra();
+        if (seleccion.length === 0) {
+            this.compraError.set('Selecciona al menos una entrada para continuar.');
+            return;
+        }
+
+        const total = this.totalSeleccionado();
+        if (this.walletBalanceCents() < total) {
+            this.compraError.set('Saldo insuficiente en el monedero para completar esta compra.');
+            return;
+        }
+
+        this.compraError.set('');
+        this.resultadoPago.set(null);
+        this.reservandoCompra.set(true);
+
+        const reservadasIds = new Set(this.entradasReservadasCompra().map((entrada) => entrada.entradaId));
+        const entradasPendientes = seleccion.filter((entrada) => !reservadasIds.has(entrada.entradaId));
+
+        try {
+            const ownerKey = this.currentReservationOwnerKey();
+            let reserva = this.reservaActual();
+
+            if (entradasPendientes.length > 0) {
+                reserva = await firstValueFrom(
+                    this.compraService.reservarEntradas(
+                        entradasPendientes.map((entrada) => entrada.entradaId),
+                        this.queueAccessToken(),
+                    ),
+                );
+
+                this.reservaOwnerKey.set(ownerKey);
+                this.compraService.marcaReservaActiva(ownerKey);
+                this.reservaActual.set(reserva);
+                this.entradasReservadasCompra.set(this.uniqueEntradasSeleccionadas([
+                    ...this.entradasReservadasCompra(),
+                    ...entradasPendientes,
+                ]));
+                this.startReservaTimer();
+            }
+
+            if (!reserva) {
+                this.compraError.set('No hay ninguna reserva activa para pagar.');
+                return;
+            }
+
+            this.procesandoPago.set(true);
+            const estado = await firstValueFrom(this.compraService.pagarConMonedero());
+            this.resultadoPago.set(estado);
+
+            if (estado.status === 'succeeded') {
+                this.savePurchasedTickets();
+                this.compraService.limpiaReservaActiva(this.reservaOwnerKey() || this.currentReservationOwnerKey());
+                this.resetCompraState(false);
+                this.cargarSesion();
+                this.volverAResultados();
+                this.cargarExplora();
+            }
+        } catch (error) {
+            this.compraError.set(this.getHttpErrorMessage(error));
+        } finally {
+            this.reservandoCompra.set(false);
+            this.procesandoPago.set(false);
+        }
+    }
+
     reservarYPagarYScroll(): void {
         void this.reservarYPagar().finally(() => {
             setTimeout(() => {
@@ -1278,7 +1443,6 @@ export class Espectaculos implements OnInit, OnDestroy {
                     this.savePurchasedTickets();
                     this.compraService.limpiaReservaActiva(this.reservaOwnerKey() || this.currentReservationOwnerKey());
                     this.resetCompraState(false);
-                    await this.recargarEntradasActivas();
                     this.volverAResultados();
                     this.cargarExplora();
                 }
@@ -1533,6 +1697,7 @@ export class Espectaculos implements OnInit, OnDestroy {
         this.profileFechaNacimiento.set(user.fechaNacimiento || '');
         this.profileRol.set(user.rol || '');
         this.profileTwoFactorEnabled.set(!!user.twoFactorEnabled);
+        this.walletBalanceCents.set(user.walletBalanceCents ?? 0);
     }
 
     private clearProfileForm() {
@@ -1543,6 +1708,7 @@ export class Espectaculos implements OnInit, OnDestroy {
         this.profileFechaNacimiento.set('');
         this.profileRol.set('');
         this.profileTwoFactorEnabled.set(false);
+        this.walletBalanceCents.set(0);
         this.profileEditing.set(false);
         this.profileSaving.set(false);
         this.profileMessage.set('');
@@ -1572,16 +1738,22 @@ export class Espectaculos implements OnInit, OnDestroy {
             return;
         }
 
-        const purchasedAt = new Date().toISOString();
+        const resultado = this.resultadoPago();
+        const purchasedAt = resultado?.purchasedAt || new Date().toISOString();
+        const refundableUntil = resultado?.refundableUntil;
+        const paymentIntentId = resultado?.paymentIntentId || this.paymentIntent()?.paymentIntentId;
         const newTickets = seleccionadas.map((entrada) => ({
             id: `${entrada.entradaId}-${purchasedAt}`,
             entradaId: entrada.entradaId,
+            paymentIntentId,
             artista: entrada.artista,
             escenario: entrada.escenario,
             fecha: entrada.fecha,
             descripcion: entrada.descripcion,
             precio: entrada.precio,
             purchasedAt,
+            refundableUntil,
+            refunded: false,
         }));
 
         const tickets = [...newTickets, ...this.readAccountTickets()];
@@ -1605,7 +1777,7 @@ export class Espectaculos implements OnInit, OnDestroy {
 
         try {
             const tickets = JSON.parse(raw) as AccountTicket[];
-            return Array.isArray(tickets) ? tickets : [];
+            return Array.isArray(tickets) ? tickets.filter((ticket) => !ticket.refunded) : [];
         } catch {
             return [];
         }

@@ -1302,6 +1302,14 @@ h1 {
   font-size: 1.2rem;
 }
 
+.wallet-balance {
+  color: #065f46;
+  display: block;
+  font-size: 0.9rem;
+  font-weight: 900;
+  margin-top: 0.35rem;
+}
+
 .account-section {
   border-bottom: 1px solid #d1d5db;
   margin: 0 1.1rem;
@@ -1511,6 +1519,28 @@ h1 {
   gap: 0.75rem;
 }
 
+.account-ticket-message,
+.account-ticket-error {
+  border-radius: 0.6rem;
+  font-size: 0.85rem;
+  font-weight: 800;
+  line-height: 1.35;
+  margin: 0;
+  padding: 0.75rem 0.85rem;
+}
+
+.account-ticket-message {
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  color: #065f46;
+}
+
+.account-ticket-error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #991b1b;
+}
+
 .account-ticket-card {
   align-items: start;
   background: #ffffff;
@@ -1578,6 +1608,29 @@ h1 {
   font-size: 0.82rem;
   font-style: normal;
   font-weight: 900;
+}
+
+.refund-state {
+  color: #065f46;
+}
+
+.refund-button {
+  background: #111827 !important;
+  border-radius: 0.45rem;
+  color: #ffffff !important;
+  display: inline-flex;
+  font-size: 0.78rem !important;
+  font-weight: 900;
+  justify-content: center;
+  margin-top: 0.6rem;
+  min-height: 2.15rem;
+  padding: 0 0.8rem;
+  text-align: center !important;
+}
+
+.refund-button:disabled {
+  background: #9ca3af !important;
+  cursor: wait;
 }
 
 .account-empty {

@@ -380,6 +380,16 @@
             }}
             <span aria-hidden="true"></span>
           </button>
+
+          <button
+            type="button"
+            class="secondary-button wallet-direct-button"
+            *ngIf="entradasDisponibles().length > 0"
+            [disabled]="entradasSeleccionadasCompra().length === 0 || reservandoCompra() || procesandoPago()"
+            (click)="comprarConMonedero()"
+          >
+            Comprar con monedero
+          </button>
         </div>
       </div>
 
@@ -418,7 +428,7 @@
           <p *ngIf="colaEstado() && !colaEstado()?.taquillaAbierta">
             La taquilla abre el {{ formatAperturaTaquilla(colaEstado()?.aperturaTaquilla) }}.
           </p>
-          <p class="auth-error" *ngIf="colaError()">{{ colaError() }}</p>
+          <p class="auth-error" *ngIf="colaError() && !colaEstado()?.entradasAgotadas">{{ colaError() }}</p>
         </div>
         <button
           type="button"
@@ -540,6 +550,15 @@
             </ng-container>
           </p>
         </div>
+        <button
+          type="button"
+          class="tickets-button wallet-pay-button"
+          [disabled]="reservandoCompra() || procesandoPago()"
+          (click)="comprarConMonedero()"
+        >
+          {{ procesandoPago() ? 'Procesando...' : 'Comprar con monedero' }}
+          <span aria-hidden="true"></span>
+        </button>
         <button type="button" class="secondary-button" [disabled]="procesandoPago()" (click)="cancelarReserva()">
           Cancelar reserva
         </button>
@@ -843,6 +862,7 @@
     <section class="account-welcome">
       <p>Bienvenido de nuevo!</p>
       <strong>{{ userDisplayName() }}</strong>
+      <span class="wallet-balance">Monedero: {{ formatEuros(walletBalanceCents()) }}</span>
     </section>
 
     <section class="account-section">
@@ -869,6 +889,9 @@
           </button>
         </div>
 
+        <p class="account-ticket-message" *ngIf="accountTicketsMessage()">{{ accountTicketsMessage() }}</p>
+        <p class="account-ticket-error" *ngIf="accountTicketsError()">{{ accountTicketsError() }}</p>
+
         <div class="account-ticket-list" *ngIf="accountTicketsFiltered().length > 0">
           <article class="account-ticket-card" *ngFor="let ticket of accountTicketsFiltered()">
             <div class="account-ticket-date">
@@ -880,6 +903,20 @@
               <p>{{ ticket.escenario }} · {{ formatFecha(ticket.fecha).hora }}</p>
               <small>{{ ticket.descripcion }}</small>
               <em>Entrada #{{ ticket.entradaId }} · {{ formatEuros(ticket.precio) }}</em>
+              <small class="refund-state" *ngIf="ticket.refunded">Devuelta al monedero</small>
+              <button
+                type="button"
+                class="refund-button"
+                *ngIf="canRefundTicket(ticket)"
+                [disabled]="refundingPurchaseId() === ticket.paymentIntentId"
+                (click)="devolverCompra(ticket)"
+              >
+                {{
+                  refundingPurchaseId() === ticket.paymentIntentId
+                    ? 'Devolviendo...'
+                    : 'Devolver compra (' + refundTimeText(ticket) + ')'
+                }}
+              </button>
             </div>
           </article>
         </div>
